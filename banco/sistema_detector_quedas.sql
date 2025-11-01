@@ -292,7 +292,7 @@ CREATE TABLE `tipocuidador` (
   `id_tipocuidador` smallint NOT NULL AUTO_INCREMENT,
   `descricao` varchar(100) NOT NULL,
   PRIMARY KEY (`id_tipocuidador`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -301,6 +301,7 @@ CREATE TABLE `tipocuidador` (
 
 LOCK TABLES `tipocuidador` WRITE;
 /*!40000 ALTER TABLE `tipocuidador` DISABLE KEYS */;
+INSERT INTO `tipocuidador` VALUES (1,'Familiar'),(2,'Enfermeiro'),(3,'Cuidador Profissional'),(4,'Médico'),(5,'Fisioterapeuta');
 /*!40000 ALTER TABLE `tipocuidador` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -315,7 +316,7 @@ CREATE TABLE `uf` (
   `id_estado` bigint NOT NULL AUTO_INCREMENT,
   `descricao` varchar(100) NOT NULL,
   PRIMARY KEY (`id_estado`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -324,6 +325,7 @@ CREATE TABLE `uf` (
 
 LOCK TABLES `uf` WRITE;
 /*!40000 ALTER TABLE `uf` DISABLE KEYS */;
+INSERT INTO `uf` VALUES (1,'Acre'),(2,'Alagoas'),(3,'Amapá'),(4,'Amazonas'),(5,'Bahia'),(6,'Ceará'),(7,'Distrito Federal'),(8,'Espírito Santo'),(9,'Goiás'),(10,'Maranhão'),(11,'Mato Grosso'),(12,'Mato Grosso do Sul'),(13,'Minas Gerais'),(14,'Pará'),(15,'Paraíba'),(16,'Paraná'),(17,'Pernambuco'),(18,'Piauí'),(19,'Rio de Janeiro'),(20,'Rio Grande do Norte'),(21,'Rio Grande do Sul'),(22,'Rondônia'),(23,'Roraima'),(24,'Santa Catarina'),(25,'São Paulo'),(26,'Sergipe'),(27,'Tocantins');
 /*!40000 ALTER TABLE `uf` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -395,4 +397,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-10-31 14:12:46
+-- Dump completed on 2025-11-01 11:35:58
