@@ -55,16 +55,7 @@ export default function TabLayout() {
         }}
       />
       
-      <Tabs.Screen
-        name="admin"
-        options={{
-          title: 'Admin',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield" size={size} color={color} />
-          ),
-        }}
-      />
-      
+      {/* ✅ ADMIN REMOVIDA - MANTIDO APENAS SETTINGS */}
       <Tabs.Screen
         name="settings"
         options={{
