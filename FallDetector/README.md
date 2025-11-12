@@ -16,6 +16,8 @@ cd FallDetector
 
 # Instale as dependências
 npm install
+npm install bcrypt
+npm install react-native-dotenv
 
 # Instale dependências do Expo
 npx expo install
@@ -27,3 +29,5 @@ npx expo start
 npx expo install @react-navigation/native @react-navigation/bottom-tabs
 npx expo install react-native-screens react-native-safe-area-context
 npx expo install @expo/vector-icons
+npx expo install @react-native-async-storage/async-storage
+npm install axios

@@ -1,54 +1,33 @@
 import React, { useState } from 'react';
-import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  ScrollView, KeyboardAvoidingView, Platform, Switch, ActivityIndicator
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { authAPI, utils } from '../../services/api'; // ajuste o caminho se sua pasta for diferente
 
 export default function CadastroScreen() {
-  const [formData, setFormData] = useState({
-    nome: '',
-    email: '',
-    telefone: '',
-    senha: '',
-    confirmarSenha: '',
-    consentimento_lgpd: false
-  });
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+  nome: '',
+  email: '',
+  cpf: '',
+  telefone: '',
+  senha: '',
+  confirmarSenha: '',
+  });
 
-  const handleChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+
+  const handleChange = (campo, valor) => {
+    setFormData({ ...formData, [campo]: valor });
   };
 
   const validarFormulario = () => {
-    const { nome, email, senha, confirmarSenha, consentimento_lgpd } = formData;
-
-    if (!nome || !email || !senha || !confirmarSenha) {
-      Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios');
+    if (!formData.nome || !formData.email || !formData.telefone || !formData.senha || !formData.confirmarSenha) {
+      Alert.alert('Atenção', 'Preencha todos os campos.');
       return false;
     }
 
-    if (!email.includes('@')) {
-      Alert.alert('Erro', 'Por favor, digite um email válido');
-      return false;
-    }
-
-    if (senha.length < 6) {
-      Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres');
-      return false;
-    }
-
-    if (senha !== confirmarSenha) {
-      Alert.alert('Erro', 'As senhas não coincidem');
-      return false;
-    }
-
-    if (!consentimento_lgpd) {
-      Alert.alert('Atenção', 'Você precisa aceitar os termos de uso');
+    if (formData.senha !== formData.confirmarSenha) {
+      Alert.alert('Erro', 'As senhas não coincidem.');
       return false;
     }
 
@@ -56,241 +35,140 @@ export default function CadastroScreen() {
   };
 
   const handleCadastro = async () => {
-    if (!validarFormulario()) {
-      return;
-    }
-
+    if (!validarFormulario()) return;
     setLoading(true);
+console.log('📦 Enviando para API:', formData);
 
     try {
-      // Simulação de cadastro
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      Alert.alert(
-        '🎉 Cadastro Realizado!', 
-        'Sua conta foi criada com sucesso!',
-        [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              // Volta para o login
-              router.back();
-            }
-          }
-        ]
-      );
-      
+      const response = await authAPI.register({
+        nome: formData.nome,
+        email: formData.email,
+        cpf: formData.cpf,
+        telefone: formData.telefone,
+        senha: formData.senha,
+      });
+
+
+      if (response.success) {
+        Alert.alert(
+          '🎉 Cadastro Realizado!',
+          'Sua conta foi criada com sucesso!',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      } else {
+        Alert.alert('Erro', response.message || 'Erro ao realizar cadastro.');
+      }
     } catch (error) {
-      Alert.alert('Erro', 'Erro ao realizar cadastro');
+      console.error('❌ Erro no cadastro:', error.response?.data || error.message);
+      console.error('Erro no cadastro:', error);
+      Alert.alert('Erro', utils.formatError(error));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView 
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Criar Conta</Text>
-          <Text style={styles.subtitle}>Preencha seus dados</Text>
-        </View>
+    <View style={styles.container}>
+      <Text style={styles.title}>Criar Conta</Text>
 
-        {/* Formulário */}
-        <View style={styles.form}>
-          <Text style={styles.label}>Nome Completo *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Seu nome completo"
-            value={formData.nome}
-            onChangeText={(value) => handleChange('nome', value)}
-            editable={!loading}
-            autoCapitalize="words"
-          />
+      <TextInput
+        style={styles.input}
+        placeholder="Nome"
+        value={formData.nome}
+        onChangeText={(text) => handleChange('nome', text)}
+      />
 
-          <Text style={styles.label}>Email *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="seu@email.com"
-            value={formData.email}
-            onChangeText={(value) => handleChange('email', value)}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            editable={!loading}
-          />
+      <TextInput
+        style={styles.input}
+        placeholder="E-mail"
+        value={formData.email}
+        onChangeText={(text) => handleChange('email', text)}
+        keyboardType="email-address"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="CPF"
+        value={formData.cpf}
+        onChangeText={(text) => handleChange('cpf', text)}
+        keyboardType="numeric"
+      />
 
-          <Text style={styles.label}>Telefone</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="(00) 00000-0000"
-            value={formData.telefone}
-            onChangeText={(value) => handleChange('telefone', value)}
-            keyboardType="phone-pad"
-            editable={!loading}
-          />
+      <TextInput
+        style={styles.input}
+        placeholder="Telefone"
+        value={formData.telefone}
+        onChangeText={(text) => handleChange('telefone', text)}
+        keyboardType="phone-pad"
+      />
 
-          <Text style={styles.label}>Senha *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Mínimo 6 caracteres"
-            value={formData.senha}
-            onChangeText={(value) => handleChange('senha', value)}
-            secureTextEntry
-            editable={!loading}
-          />
+      <TextInput
+        style={styles.input}
+        placeholder="Senha"
+        value={formData.senha}
+        onChangeText={(text) => handleChange('senha', text)}
+        secureTextEntry
+      />
 
-          <Text style={styles.label}>Confirmar Senha *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite novamente sua senha"
-            value={formData.confirmarSenha}
-            onChangeText={(value) => handleChange('confirmarSenha', value)}
-            secureTextEntry
-            editable={!loading}
-          />
+      <TextInput
+        style={styles.input}
+        placeholder="Confirmar Senha"
+        value={formData.confirmarSenha}
+        onChangeText={(text) => handleChange('confirmarSenha', text)}
+        secureTextEntry
+      />
 
-          {/* Termos e Condições */}
-          <View style={styles.consentContainer}>
-            <Switch
-              value={formData.consentimento_lgpd}
-              onValueChange={(value) => handleChange('consentimento_lgpd', value)}
-              trackColor={{ false: '#767577', true: '#81b0ff' }}
-              thumbColor={formData.consentimento_lgpd ? '#007AFF' : '#f4f3f4'}
-              disabled={loading}
-            />
-            <Text style={styles.consentText}>
-              Aceito os termos de uso e política de privacidade *
-            </Text>
-          </View>
+      <TouchableOpacity style={styles.button} onPress={handleCadastro} disabled={loading}>
+        {loading ? (
+          <ActivityIndicator color="#FFF" />
+        ) : (
+          <Text style={styles.buttonText}>Cadastrar</Text>
+        )}
+      </TouchableOpacity>
 
-          {/* Botão de Cadastro */}
-          <TouchableOpacity 
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleCadastro}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Cadastrar</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Link para Login */}
-          <TouchableOpacity 
-            style={styles.loginLink}
-            onPress={() => router.back()}
-            disabled={loading}
-          >
-            <Text style={styles.loginText}>
-              Já tem uma conta? <Text style={styles.loginTextBold}>Faça login</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      <TouchableOpacity onPress={() => router.back()}>
+        <Text style={styles.link}>Já tem uma conta? Entrar</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 24,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
+    justifyContent: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#007AFF',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
-  },
-  form: {
-    backgroundColor: '#ffffff',
-    padding: 24,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#495057',
+    marginBottom: 30,
+    textAlign: 'center',
+    color: '#333',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ced4da',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 15,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
-    color: '#495057',
-  },
-  consentContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingVertical: 8,
-  },
-  consentText: {
-    marginLeft: 12,
-    flex: 1,
-    fontSize: 14,
-    color: '#495057',
-    lineHeight: 20,
   },
   button: {
-    backgroundColor: '#007AFF',
-    padding: 18,
-    borderRadius: 12,
+    backgroundColor: '#007bff',
+    paddingVertical: 15,
+    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  buttonDisabled: {
-    backgroundColor: '#6c757d',
-    shadowOpacity: 0,
   },
   buttonText: {
-    color: '#ffffff',
+    color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  loginLink: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  loginText: {
-    color: '#6c757d',
-    fontSize: 14,
-  },
-  loginTextBold: {
-    color: '#007AFF',
-    fontWeight: 'bold',
+  link: {
+    marginTop: 20,
+    textAlign: 'center',
+    color: '#007bff',
+    fontSize: 16,
   },
 });

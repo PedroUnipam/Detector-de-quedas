@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { 
+// app/(auth)/login.js
+import React, { useState, useEffect } from 'react';
+import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
   ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { authAPI, utils } from '../../services/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -11,7 +13,27 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Verificar se já está autenticado
+  useEffect(() => {
+    checkAuthentication();
+  }, []);
+
+  const checkAuthentication = async () => {
+    try {
+      const isAuth = await utils.isAuthenticated();
+      if (isAuth) {
+        // Verificar se o token ainda é válido
+        await authAPI.verifyToken();
+        router.replace('/(tabs)');
+      }
+    } catch (error) {
+      // Token inválido, continuar no login
+      await authAPI.logout();
+    }
+  };
+
   const handleLogin = async () => {
+    // Validações
     if (!email || !senha) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos');
       return;
@@ -25,15 +47,24 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Simulação de login
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Fazer login na API
+      const response = await authAPI.login(email, senha);
       
-      // Login bem-sucedido - vai para a home
-      Alert.alert('Sucesso', 'Login realizado com sucesso!');
-      router.replace('/(tabs)');
-      
+      // Login bem-sucedido
+      Alert.alert(
+        'Sucesso',
+        `Bem-vindo(a), ${response.user.nome}!`,
+        [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(tabs)'),
+          },
+        ]
+      );
     } catch (error) {
-      Alert.alert('Erro', 'Erro ao fazer login');
+      console.error('Erro no login:', error);
+      const errorMessage = utils.formatError(error);
+      Alert.alert('Erro no Login', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -44,11 +75,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
@@ -85,7 +116,7 @@ export default function LoginScreen() {
           />
 
           {/* Botão de Login */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
@@ -105,7 +136,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Botão de Cadastro */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.secondaryButton}
             onPress={handleCadastro}
             disabled={loading}
@@ -117,7 +148,7 @@ export default function LoginScreen() {
         {/* Informações para Desenvolvimento */}
         <View style={styles.devInfo}>
           <Text style={styles.devText}>
-            💡 Para teste: Use qualquer email e senha
+            💡 Ambiente: {__DEV__ ? 'Desenvolvimento' : 'Produção'}
           </Text>
         </View>
       </ScrollView>
@@ -242,4 +273,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-});
+}); 
