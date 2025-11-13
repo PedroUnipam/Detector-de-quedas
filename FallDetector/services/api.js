@@ -67,26 +67,19 @@ export const authAPI = {
   login: async (email, senha) => {
     try {
       console.log('🔐 Tentando login com:', email);
-      
       const response = await api.post('/auth/login', { email, senha });
       
-      console.log('📦 Resposta completa do login:', response.data);
-      
-      // Verificar estrutura da resposta
       if (!response.data.success) {
         throw new Error(response.data.message || 'Erro ao fazer login');
       }
       
-      // Salvar token e dados do usuário
       if (response.data.data && response.data.data.token) {
         await AsyncStorage.setItem('userToken', response.data.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
         console.log('✅ Token e dados salvos no AsyncStorage');
       }
       
-      // Retornar dados do usuário e token
-      return response.data.data; // Retorna { token, user: {...} }
-      
+      return response.data.data;
     } catch (error) {
       console.error('❌ Erro no authAPI.login:', error.response?.data || error.message);
       throw error;
@@ -96,26 +89,8 @@ export const authAPI = {
   register: async (userData) => {
     try {
       console.log('📝 Registrando usuário:', userData);
+      const response = await api.post('/auth/register', userData);
       
-      const response = await api.post('/auth/register', {
-        nome: userData.nome,
-        email: userData.email,
-        cpf: userData.cpf,
-        telefone: userData.telefone,
-        senha: userData.senha,
-        // Campos opcionais de endereço
-        cep: userData.cep,
-        logradouro: userData.logradouro,
-        numero: userData.numero,
-        complemento: userData.complemento,
-        bairro: userData.bairro,
-        cidade: userData.cidade,
-        uf: userData.uf,
-      });
-      
-      console.log('📦 Resposta do registro:', response.data);
-      
-      // Salvar token automaticamente após registro
       if (response.data.success && response.data.data?.token) {
         await AsyncStorage.setItem('userToken', response.data.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
@@ -123,7 +98,6 @@ export const authAPI = {
       }
       
       return response.data;
-      
     } catch (error) {
       console.error('❌ Erro no authAPI.register:', error.response?.data || error.message);
       throw error;
@@ -152,75 +126,114 @@ export const authAPI = {
   },
 };
 
-// ==================== USUÁRIO ====================
-export const userAPI = {
-  getProfile: async () => {
-    const response = await api.get('/user/profile');
-    return response.data;
-  },
-
-  updateProfile: async (userData) => {
-    const response = await api.put('/user/profile', userData);
-    return response.data;
-  },
-
-  changePassword: async (senhaAtual, novaSenha) => {
-    const response = await api.post('/user/change-password', {
-      senhaAtual,
-      novaSenha,
-    });
-    return response.data;
-  },
-
-  getCuidadores: async () => {
-    const response = await api.get('/user/cuidadores');
-    return response.data;
-  },
-
-  addCuidador: async (cuidadorData) => {
-    const response = await api.post('/user/cuidadores', cuidadorData);
-    return response.data;
-  },
-
-  removeCuidador: async (cuidadorId) => {
-    const response = await api.delete(`/user/cuidadores/${cuidadorId}`);
-    return response.data;
-  },
-};
-
 // ==================== DISPOSITIVOS ====================
 export const deviceAPI = {
+  // Listar dispositivos configurados
   getDevices: async () => {
-    const response = await api.get('/devices');
-    return response.data;
+    try {
+      const response = await api.get('/devices');
+      console.log('📱 Dispositivos carregados:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao carregar dispositivos:', error);
+      throw error;
+    }
   },
 
+  // Adicionar novo dispositivo
   addDevice: async (deviceData) => {
-    const response = await api.post('/devices', deviceData);
-    return response.data;
+    try {
+      console.log('➕ Adicionando dispositivo:', deviceData);
+      const response = await api.post('/devices', deviceData);
+      console.log('✅ Dispositivo adicionado:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao adicionar dispositivo:', error.response?.data || error);
+      throw error;
+    }
   },
 
+  // Atualizar dispositivo
   updateDevice: async (deviceId, deviceData) => {
-    const response = await api.put(`/devices/${deviceId}`, deviceData);
-    return response.data;
+    try {
+      console.log(`✏️ Atualizando dispositivo ${deviceId}:`, deviceData);
+      const response = await api.put(`/devices/${deviceId}`, deviceData);
+      console.log('✅ Dispositivo atualizado:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao atualizar dispositivo:', error);
+      throw error;
+    }
   },
 
+  // Remover dispositivo
   removeDevice: async (deviceId) => {
-    const response = await api.delete(`/devices/${deviceId}`);
-    return response.data;
+    try {
+      console.log(`🗑️ Removendo dispositivo ${deviceId}`);
+      const response = await api.delete(`/devices/${deviceId}`);
+      console.log('✅ Dispositivo removido:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao remover dispositivo:', error);
+      throw error;
+    }
   },
 
+  // Obter detalhes de um dispositivo
+  getDeviceDetails: async (deviceId) => {
+    try {
+      const response = await api.get(`/devices/${deviceId}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao obter detalhes:', error);
+      throw error;
+    }
+  },
+
+  // Buscar dispositivos disponíveis
   scanDevices: async (tipo) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          dispositivos: [
-            { nome: 'Monitor SG-001', tipo: 'wifi', bateria: 88, disponivel: true },
-            { nome: 'Guardian-5G', tipo: 'bluetooth', bateria: 95, disponivel: true },
-          ],
-        });
-      }, 1500);
-    });
+    try {
+      console.log(`🔍 Buscando dispositivos ${tipo}...`);
+      const response = await api.get('/devices/scan', { params: { tipo } });
+      console.log('📡 Dispositivos encontrados:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao buscar dispositivos:', error);
+      // Fallback para mock local se API falhar
+      return {
+        dispositivos: tipo === 'wifi' 
+          ? [
+              { nome: 'ESP32-WiFi-001', tipo: 'wifi', disponivel: true },
+              { nome: 'Monitor-WiFi-5G', tipo: 'wifi', disponivel: true }
+            ]
+          : [
+              { nome: 'ESP32-BT-001', tipo: 'bluetooth', macAddress: 'AA:BB:CC:DD:EE:01', disponivel: true },
+              { nome: 'Monitor-BT-002', tipo: 'bluetooth', macAddress: 'AA:BB:CC:DD:EE:02', disponivel: true }
+            ]
+      };
+    }
+  },
+
+  // Obter código ESP32 configurado
+  getESP32Code: async (deviceId) => {
+    try {
+      const response = await api.get(`/devices/${deviceId}/code`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao obter código ESP32:', error);
+      throw error;
+    }
+  },
+
+  // Toggle status do dispositivo
+  toggleStatus: async (deviceId) => {
+    try {
+      const response = await api.put(`/devices/${deviceId}/toggle`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao alternar status:', error);
+      throw error;
+    }
   },
 };
 
@@ -265,6 +278,42 @@ export const notificationAPI = {
   },
 };
 
+// ==================== USUÁRIO ====================
+export const userAPI = {
+  getProfile: async () => {
+    const response = await api.get('/user/profile');
+    return response.data;
+  },
+
+  updateProfile: async (userData) => {
+    const response = await api.put('/user/profile', userData);
+    return response.data;
+  },
+
+  changePassword: async (senhaAtual, novaSenha) => {
+    const response = await api.post('/user/change-password', {
+      senhaAtual,
+      novaSenha,
+    });
+    return response.data;
+  },
+
+  getCuidadores: async () => {
+    const response = await api.get('/user/cuidadores');
+    return response.data;
+  },
+
+  addCuidador: async (cuidadorData) => {
+    const response = await api.post('/user/cuidadores', cuidadorData);
+    return response.data;
+  },
+
+  removeCuidador: async (cuidadorId) => {
+    const response = await api.delete(`/user/cuidadores/${cuidadorId}`);
+    return response.data;
+  },
+};
+
 // ==================== UTILITÁRIOS ====================
 export const utils = {
   isAuthenticated: async () => {
@@ -287,15 +336,12 @@ export const utils = {
 
   formatError: (error) => {
     if (error.response) {
-      // Erro da API
-      return error.response.data?.message || 
-             error.response.data?.error || 
+      return error.response.data?.message ||
+             error.response.data?.error ||
              'Erro no servidor';
     } else if (error.request) {
-      // Erro de conexão
       return 'Erro de conexão. Verifique sua internet e se o servidor está rodando.';
     } else {
-      // Outro erro
       return error.message || 'Erro desconhecido';
     }
   },

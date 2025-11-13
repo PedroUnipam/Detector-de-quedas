@@ -37,11 +37,13 @@ router.delete('/user/caregivers/:caregiverId', verifyToken, userController.remov
 
 // --- Dispositivos ---
 router.get('/devices', verifyToken, deviceController.getUserDevices);
+router.get('/devices/scan', verifyToken, deviceController.scanDevices);
 router.get('/devices/:deviceId', verifyToken, deviceController.getDeviceDetails);
 router.post('/devices', verifyToken, deviceController.addDevice);
 router.put('/devices/:deviceId', verifyToken, deviceController.updateDevice);
-router.delete('/devices/:deviceId', verifyToken, deviceController.deleteDevice);
 router.put('/devices/:deviceId/toggle', verifyToken, deviceController.toggleDeviceStatus);
+router.delete('/devices/:deviceId', verifyToken, deviceController.deleteDevice);
+router.get('/devices/:deviceId/code', verifyToken, deviceController.getESP32Code);
 
 // --- Quedas ---
 router.get('/falls', verifyToken, fallController.getUserFalls);
