@@ -47,22 +47,41 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
+      console.log('🔐 Iniciando login...');
+      
       // Fazer login na API
-      const response = await authAPI.login(email, senha);
+      const data = await authAPI.login(email, senha);
+      
+      console.log('📦 Dados recebidos do login:', data);
+      
+      // Verificar se recebeu os dados do usuário
+      if (!data || !data.user) {
+        throw new Error('Resposta inválida do servidor');
+      }
       
       // Login bem-sucedido
       Alert.alert(
         'Sucesso',
-        `Bem-vindo(a), ${response.user.nome}!`,
+        `Bem-vindo(a), ${data.user.nome}!`,
         [
           {
             text: 'OK',
-            onPress: () => router.replace('/(tabs)'),
+            onPress: () => {
+              console.log('✅ Redirecionando para home...');
+              router.replace('/(tabs)');
+            },
           },
         ]
       );
+      
     } catch (error) {
-      console.error('Erro no login:', error);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ ERRO COMPLETO NO LOGIN:');
+      console.error('Mensagem:', error.message);
+      console.error('Resposta:', error.response?.data);
+      console.error('Status:', error.response?.status);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
       const errorMessage = utils.formatError(error);
       Alert.alert('Erro no Login', errorMessage);
     } finally {
@@ -74,6 +93,14 @@ export default function LoginScreen() {
     router.push('/(auth)/cadastro');
   };
 
+  const handleEsqueciSenha = () => {
+    Alert.alert(
+      'Recuperar Senha',
+      'Funcionalidade em desenvolvimento.\nEm breve você poderá redefinir sua senha por email.',
+      [{ text: 'OK' }]
+    );
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -82,6 +109,7 @@ export default function LoginScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
         <View style={styles.header}>
@@ -115,6 +143,15 @@ export default function LoginScreen() {
             editable={!loading}
           />
 
+          {/* Link Esqueci Senha */}
+          <TouchableOpacity 
+            onPress={handleEsqueciSenha}
+            disabled={loading}
+            style={styles.forgotPasswordContainer}
+          >
+            <Text style={styles.forgotPasswordText}>Esqueci minha senha</Text>
+          </TouchableOpacity>
+
           {/* Botão de Login */}
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -146,11 +183,16 @@ export default function LoginScreen() {
         </View>
 
         {/* Informações para Desenvolvimento */}
-        <View style={styles.devInfo}>
-          <Text style={styles.devText}>
-            💡 Ambiente: {__DEV__ ? 'Desenvolvimento' : 'Produção'}
-          </Text>
-        </View>
+        {__DEV__ && (
+          <View style={styles.devInfo}>
+            <Text style={styles.devText}>
+              💡 Ambiente: Desenvolvimento
+            </Text>
+            <Text style={styles.devText}>
+              📡 API: {Platform.OS === 'web' ? 'localhost:3000' : 'Backend local'}
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -206,10 +248,19 @@ const styles = StyleSheet.create({
     borderColor: '#ced4da',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 12,
     fontSize: 16,
     backgroundColor: '#f8f9fa',
     color: '#495057',
+  },
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginBottom: 20,
+  },
+  forgotPasswordText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
   button: {
     backgroundColor: '#007AFF',
@@ -269,8 +320,9 @@ const styles = StyleSheet.create({
   },
   devText: {
     color: '#007AFF',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
+    marginVertical: 2,
   },
-}); 
+});

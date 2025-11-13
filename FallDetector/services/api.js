@@ -4,32 +4,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 // ==================== CONFIGURAÇÃO AUTOMÁTICA DO ENDPOINT ====================
-
-// Função para detectar a URL base da API conforme o ambiente
 const getBaseUrl = () => {
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:3000/api';
   }
-
   if (Platform.OS === 'ios') {
     return 'http://localhost:3000/api';
   }
-
-  // 👇 Novo caso: web
   if (Platform.OS === 'web') {
     return 'http://localhost:3000/api';
   }
-
-  // fallback para celular físico (Expo Go)
+  // Para dispositivo físico, substitua pelo seu IP local
   return 'http://192.168.0.10:3000/api';
 };
 
-
-// URL base dinâmica
 const API_URL = getBaseUrl();
 
 // ==================== CONFIGURAÇÃO BASE DO AXIOS ====================
-
 const api = axios.create({
   baseURL: API_URL,
   timeout: 10000,
@@ -39,8 +30,6 @@ const api = axios.create({
 });
 
 // ==================== INTERCEPTORES ====================
-
-// Adiciona o token JWT automaticamente
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -48,6 +37,7 @@ api.interceptors.request.use(
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      console.log(`📡 ${config.method.toUpperCase()} ${config.url}`);
     } catch (error) {
       console.error('Erro ao buscar token:', error);
     }
@@ -56,10 +46,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Trata erros de autenticação
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ Resposta: ${response.config.url}`, response.status);
+    return response;
+  },
   async (error) => {
+    console.error(`❌ Erro na requisição:`, error.response?.data || error.message);
+    
     if (error.response?.status === 401) {
       await AsyncStorage.removeItem('userToken');
       await AsyncStorage.removeItem('userData');
@@ -69,44 +63,96 @@ api.interceptors.response.use(
 );
 
 // ==================== AUTENTICAÇÃO ====================
-
 export const authAPI = {
   login: async (email, senha) => {
-    const response = await api.post('/auth/login', { email, senha });
-    if (response.data.token) {
-      await AsyncStorage.setItem('userToken', response.data.token);
-      await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+    try {
+      console.log('🔐 Tentando login com:', email);
+      
+      const response = await api.post('/auth/login', { email, senha });
+      
+      console.log('📦 Resposta completa do login:', response.data);
+      
+      // Verificar estrutura da resposta
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Erro ao fazer login');
+      }
+      
+      // Salvar token e dados do usuário
+      if (response.data.data && response.data.data.token) {
+        await AsyncStorage.setItem('userToken', response.data.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
+        console.log('✅ Token e dados salvos no AsyncStorage');
+      }
+      
+      // Retornar dados do usuário e token
+      return response.data.data; // Retorna { token, user: {...} }
+      
+    } catch (error) {
+      console.error('❌ Erro no authAPI.login:', error.response?.data || error.message);
+      throw error;
     }
-    return response.data;
   },
 
   register: async (userData) => {
-  // Aqui renomeamos os campos para o formato que o backend espera
-  const payload = {
-    name: userData.nome,
-    email: userData.email,
-    phone: userData.telefone,
-    password: userData.senha,
-  };
-
-  const response = await api.post('/auth/register', payload);
-  return response.data;
-},
-
+    try {
+      console.log('📝 Registrando usuário:', userData);
+      
+      const response = await api.post('/auth/register', {
+        nome: userData.nome,
+        email: userData.email,
+        cpf: userData.cpf,
+        telefone: userData.telefone,
+        senha: userData.senha,
+        // Campos opcionais de endereço
+        cep: userData.cep,
+        logradouro: userData.logradouro,
+        numero: userData.numero,
+        complemento: userData.complemento,
+        bairro: userData.bairro,
+        cidade: userData.cidade,
+        uf: userData.uf,
+      });
+      
+      console.log('📦 Resposta do registro:', response.data);
+      
+      // Salvar token automaticamente após registro
+      if (response.data.success && response.data.data?.token) {
+        await AsyncStorage.setItem('userToken', response.data.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
+        console.log('✅ Usuário registrado e autenticado');
+      }
+      
+      return response.data;
+      
+    } catch (error) {
+      console.error('❌ Erro no authAPI.register:', error.response?.data || error.message);
+      throw error;
+    }
+  },
 
   verifyToken: async () => {
-    const response = await api.get('/auth/verify');
-    return response.data;
+    try {
+      const response = await api.get('/auth/verify');
+      console.log('✅ Token verificado:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erro ao verificar token:', error.response?.data || error.message);
+      throw error;
+    }
   },
 
   logout: async () => {
-    await AsyncStorage.removeItem('userToken');
-    await AsyncStorage.removeItem('userData');
+    try {
+      await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('userData');
+      console.log('👋 Logout realizado');
+    } catch (error) {
+      console.error('❌ Erro no logout:', error);
+    }
   },
 };
 
 // ==================== USUÁRIO ====================
-
 export const userAPI = {
   getProfile: async () => {
     const response = await api.get('/user/profile');
@@ -143,7 +189,6 @@ export const userAPI = {
 };
 
 // ==================== DISPOSITIVOS ====================
-
 export const deviceAPI = {
   getDevices: async () => {
     const response = await api.get('/devices');
@@ -180,7 +225,6 @@ export const deviceAPI = {
 };
 
 // ==================== QUEDAS ====================
-
 export const fallAPI = {
   registerFall: async (fallData) => {
     const response = await api.post('/falls', fallData);
@@ -199,7 +243,6 @@ export const fallAPI = {
 };
 
 // ==================== NOTIFICAÇÕES ====================
-
 export const notificationAPI = {
   getNotifications: async () => {
     const response = await api.get('/notifications');
@@ -223,7 +266,6 @@ export const notificationAPI = {
 };
 
 // ==================== UTILITÁRIOS ====================
-
 export const utils = {
   isAuthenticated: async () => {
     try {
@@ -245,10 +287,15 @@ export const utils = {
 
   formatError: (error) => {
     if (error.response) {
-      return error.response.data?.message || 'Erro no servidor';
+      // Erro da API
+      return error.response.data?.message || 
+             error.response.data?.error || 
+             'Erro no servidor';
     } else if (error.request) {
-      return 'Erro de conexão. Verifique sua internet.';
+      // Erro de conexão
+      return 'Erro de conexão. Verifique sua internet e se o servidor está rodando.';
     } else {
+      // Outro erro
       return error.message || 'Erro desconhecido';
     }
   },
