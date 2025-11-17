@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 // ==================== CONFIGURAÇÃO AUTOMÁTICA DO ENDPOINT ====================
 const getBaseUrl = () => {
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000/api';
+    return 'http://192.168.12.4:3000/api';
   }
   if (Platform.OS === 'ios') {
     return 'http://localhost:3000/api';
@@ -15,7 +15,7 @@ const getBaseUrl = () => {
     return 'http://localhost:3000/api';
   }
   // Para dispositivo físico, substitua pelo seu IP local
-  return 'http://192.168.0.10:3000/api';
+  return 'http://192.168.12.4:3000/api';
 };
 
 const API_URL = getBaseUrl();
