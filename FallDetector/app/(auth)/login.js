@@ -1,248 +1,98 @@
 // app/(auth)/login.js
-import React, { useState, useEffect } from 'react';
-import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert,
-  ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { authAPI, utils } from '../../services/api';
 
-export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [loading, setLoading] = useState(false);
+import { useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import { useRouter } from "expo-router";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { auth } from "../../services/firebase";
+
+export default function Login() {
   const router = useRouter();
 
-  // Verificar se já está autenticado
-  useEffect(() => {
-    checkAuthentication();
-  }, []);
-
-  const checkAuthentication = async () => {
-    try {
-      const isAuth = await utils.isAuthenticated();
-      if (isAuth) {
-        // Verificar se o token ainda é válido
-        await authAPI.verifyToken();
-        router.replace('/(tabs)');
-      }
-    } catch (error) {
-      // Token inválido, continuar no login
-      await authAPI.logout();
-    }
-  };
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    // Validações
     if (!email || !senha) {
-      Alert.alert('Erro', 'Por favor, preencha todos os campos');
+      Alert.alert("Erro", "Preencha email e senha.");
       return;
     }
-
-    if (!email.includes('@')) {
-      Alert.alert('Erro', 'Por favor, digite um email válido');
-      return;
-    }
-
-    setLoading(true);
 
     try {
-      console.log('🔐 Iniciando login...');
-      
-      // Fazer login na API
-      const data = await authAPI.login(email, senha);
-      
-      console.log('📦 Dados recebidos do login:', data);
-      
-      // Verificar se recebeu os dados do usuário
-      if (!data || !data.user) {
-        throw new Error('Resposta inválida do servidor');
-      }
-      
-      // Login bem-sucedido
-      Alert.alert(
-        'Sucesso',
-        `Bem-vindo(a), ${data.user.nome}!`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('✅ Redirecionando para home...');
-              router.replace('/(tabs)');
-            },
-          },
-        ]
-      );
-      
+      setLoading(true);
+
+      const cred = await signInWithEmailAndPassword(auth, email, senha);
+
+      const token = await cred.user.getIdToken();
+      const uid = cred.user.uid;
+
+      await AsyncStorage.setItem("authToken", token);
+      await AsyncStorage.setItem("uid", uid);
+
+      console.log("🔐 Login bem-sucedido!");
+
+      router.replace("/(tabs)");
+
     } catch (error) {
-      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('❌ ERRO COMPLETO NO LOGIN:');
-      console.error('Mensagem:', error.message);
-      console.error('Resposta:', error.response?.data);
-      console.error('Status:', error.response?.status);
-      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      
-      const errorMessage = utils.formatError(error);
-      Alert.alert('Erro no Login', errorMessage);
+      console.error("Erro login: ", error);
+      Alert.alert("Erro", "Email ou senha inválidos.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCadastro = () => {
-    router.push('/(auth)/cadastro');
-  };
-
-  const handleEsqueciSenha = () => {
-    Alert.alert(
-      'Recuperar Senha',
-      'Funcionalidade em desenvolvimento.\nEm breve você poderá redefinir sua senha por email.',
-      [{ text: 'OK' }]
-    );
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.emoji}>🚨</Text>
-          <Text style={styles.title}>FallDetector</Text>
-          <Text style={styles.subtitle}>Sua segurança em primeiro lugar</Text>
-        </View>
+    <View style={styles.container}>
 
-        {/* Formulário */}
-        <View style={styles.form}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="seu@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            editable={!loading}
-          />
+      <Text style={styles.title}>Entrar</Text>
 
-          <Text style={styles.label}>Senha</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Digite sua senha"
-            value={senha}
-            onChangeText={setSenha}
-            secureTextEntry
-            autoComplete="password"
-            editable={!loading}
-          />
+      <TextInput
+        placeholder="Email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        style={styles.input}
+        value={email}
+        onChangeText={setEmail}
+      />
 
-          {/* Link Esqueci Senha */}
-          <TouchableOpacity 
-            onPress={handleEsqueciSenha}
-            disabled={loading}
-            style={styles.forgotPasswordContainer}
-          >
-            <Text style={styles.forgotPasswordText}>Esqueci minha senha</Text>
-          </TouchableOpacity>
+      <TextInput
+        placeholder="Senha"
+        secureTextEntry
+        style={styles.input}
+        value={senha}
+        onChangeText={setSenha}
+      />
 
-          {/* Botão de Login */}
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Entrar</Text>
-            )}
-          </TouchableOpacity>
+      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+        <Text style={styles.buttonText}>{loading ? "Carregando..." : "Entrar"}</Text>
+      </TouchableOpacity>
 
-          {/* Divisor */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.dividerLine} />
-          </View>
+      <TouchableOpacity onPress={() => router.push("/cadastro")}>
+        <Text style={styles.link}>Não tem conta? Cadastre-se</Text>
+      </TouchableOpacity>
 
-          {/* Botão de Cadastro */}
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={handleCadastro}
-            disabled={loading}
-          >
-            <Text style={styles.secondaryButtonText}>Criar nova conta</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Informações para Desenvolvimento */}
-        {__DEV__ && (
-          <View style={styles.devInfo}>
-            <Text style={styles.devText}>
-              💡 Ambiente: Desenvolvimento
-            </Text>
-            <Text style={styles.devText}>
-              📡 API: {Platform.OS === 'web' ? 'localhost:3000' : 'Backend local'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    padding: 24,
+    justifyContent: "center",
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
+
   title: {
-    fontSize: 36,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#007AFF',
-    marginBottom: 8,
+    textAlign: "center",
+    marginBottom: 32
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
-    textAlign: 'center',
-  },
-  form: {
-    backgroundColor: '#ffffff',
-    padding: 24,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#495057',
-  },
+
   input: {
     borderWidth: 1,
     borderColor: '#ced4da',
@@ -253,20 +103,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     color: '#495057',
   },
-  forgotPasswordContainer: {
-    alignSelf: 'flex-end',
-    marginBottom: 20,
-  },
-  forgotPasswordText: {
-    color: '#007AFF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
   button: {
     backgroundColor: '#007AFF',
-    padding: 18,
+    padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 8,
     marginBottom: 20,
     shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 4 },
@@ -274,55 +117,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  buttonDisabled: {
-    backgroundColor: '#6c757d',
-    shadowOpacity: 0,
-  },
+
   buttonText: {
     color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e9ecef',
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: '#6c757d',
-    fontSize: 14,
-  },
-  secondaryButton: {
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  secondaryButtonText: {
-    color: '#007AFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  devInfo: {
-    marginTop: 32,
-    padding: 16,
-    backgroundColor: '#e7f3ff',
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  devText: {
-    color: '#007AFF',
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginVertical: 2,
-  },
+
+  link: {
+    marginTop: 18,
+    color: "#007AFF",
+    textAlign: "center",
+    fontSize: 15
+  }
 });

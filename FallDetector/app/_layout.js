@@ -1,32 +1,51 @@
-import { Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Text } from 'react-native';
+// app/_layout.js
+import { Stack, useRouter, useSegments } from "expo-router";
+import { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../services/firebase";
 
 export default function RootLayout() {
-  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const segments = useSegments();
+
+  const [loading, setLoading] = useState(true);
+  const [logged, setLogged] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
+    // Verifica Firebase Auth
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      const token = await AsyncStorage.getItem("authToken");
 
-    return () => clearTimeout(timer);
+      if (user && token) {
+        setLogged(true);
+      } else {
+        setLogged(false);
+      }
+
+      setLoading(false);
+    });
+
+    return unsub;
   }, []);
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={{ marginTop: 10, color: '#666' }}>Iniciando...</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    if (loading) return;
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
-    </Stack>
-  );
+    const inAuthGroup = segments[0] === "(auth)"; // LOGIN e CADASTRO
+
+    if (!logged && !inAuthGroup) {
+      // Usuário NÃO logado tentando acessar outra área → REDIRECIONAR
+      router.replace("/login");
+    }
+
+    if (logged && inAuthGroup) {
+      // Usuário logado tentando abrir login/cadastro → mandar para home
+      router.replace("/(tabs)");
+    }
+  }, [logged, loading, segments]);
+
+  if (loading) return null; // evita flickering
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

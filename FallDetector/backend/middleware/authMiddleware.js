@@ -1,57 +1,26 @@
-// middleware/authMiddleware.js
-const jwt = require('jsonwebtoken');
+const admin = require('firebase-admin');
 
-// Middleware para verificar token JWT
-const verifyToken = (req, res, next) => {
+module.exports = async (req, res, next) => {
   try {
-    // Buscar token no header Authorization
-    const authHeader = req.headers.authorization;
+    const header = req.headers.authorization;
 
-    if (!authHeader) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Token não fornecido' 
-      });
+    if (!header || !header.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token não fornecido' });
     }
 
-    // Formato esperado: "Bearer TOKEN"
-    const parts = authHeader.split(' ');
+    const token = header.split(' ')[1];
 
-    if (parts.length !== 2 || parts[0] !== 'Bearer') {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Formato de token inválido' 
-      });
-    }
+    const decoded = await admin.auth().verifyIdToken(token);
 
-    const token = parts[1];
+    req.user = {
+      uid: decoded.uid,
+      email: decoded.email
+    };
 
-    // Verificar token
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-      if (err) {
-        return res.status(401).json({ 
-          success: false, 
-          message: 'Token inválido ou expirado' 
-        });
-      }
+    next();
 
-      // Adicionar informações do usuário ao request
-      req.user = {
-        id: decoded.id,
-        email: decoded.email
-      };
-
-      next();
-    });
-
-  } catch (error) {
-    console.error('Erro no middleware de autenticação:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Erro ao verificar token',
-      error: error.message 
-    });
+  } catch (err) {
+    console.error('Erro ao verificar token Firebase:', err);
+    return res.status(401).json({ error: 'Token inválido' });
   }
 };
-
-module.exports = verifyToken;

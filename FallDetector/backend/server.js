@@ -9,6 +9,9 @@ const morgan = require('morgan');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer'); // ADICIONAR: npm install multer
+const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
+const db = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -51,6 +54,13 @@ const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB
   }
+});
+
+// -=================== FIREBASE =======================
+app.locals.db = db;
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
 });
 
 // Exportar para usar nas rotas

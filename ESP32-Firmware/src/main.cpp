@@ -1,211 +1,212 @@
-/* ESP32 - Fall Detector + HTTP endpoints
-   Endpoints:
-     GET  /connect      -> { status: "connected", deviceId: ... }
-     GET  /status       -> plain text status
-     GET  /latest_fall  -> {"hasFall": true/false, "timestamp": 12345, "deviceId": ...}
-     POST /ack          -> acknowledge and clear fall (optional)
-*/
-
-#include <Wire.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "MPU6050_light.h"
-#include <WebServer.h>
+#include <Wire.h>
+#include <time.h>
 
-// ========== CONFIG ==========
-const char* ssid = "FISIOS R";
-const char* password = "13032981";
-const char* serverUrl = "http://192.168.0.10:3000/api/falls/register"; // sua API externa (se usar)
-int deviceId = 1;
+// ===========================
+// CONFIG WiFi
+// ===========================
+const char *ssid = "FISIOS R";
+const char *password = "13032981";
 
-// I2C pins
+// ===========================
+// CONFIG Firebase
+// ===========================
+#define API_KEY "AIzaSyCk7yZZXAyAnLgWqjYWmfJXJgp84LMa4tk"
+#define USER_EMAIL "esp32-device-1@system.com"
+#define USER_PASSWORD "esp32_firmware@2025"
+#define PROJECT_ID "falldetector-3efce"
+
+// Firestore URL
+String firestoreUrl = "https://firestore.googleapis.com/v1/projects/" PROJECT_ID "/databases/(default)/documents/quedas";
+
+// ===========================
+// CONFIG DISPOSITIVO
+// ===========================
+String deviceId = "esp32-1";
+
 #define SDA_PIN 21
 #define SCL_PIN 22
 MPU6050 mpu(Wire);
 
-// HTTP server
-WebServer server(80);
+float THRESHOLD_MIN = 0.5;
+float THRESHOLD_MAX = 2.5;
 
-// detection thresholds and control
-const float THRESHOLD_MIN = 0.5;
-const float THRESHOLD_MAX = 2.5;
-const unsigned long INTERVAL_ENVIO = 5000;
 unsigned long ultimoEnvio = 0;
-volatile bool quedaDetectada = false;
+unsigned long intervalo = 5000;
 
-// last fall info (shared via HTTP)
-volatile unsigned long lastFallTimestamp = 0; // millis() when fall detected
-volatile bool hasNewFall = false;
+// ======================================================
+// AUTH: Obter token JWT do Firebase Auth via REST
+// ======================================================
+String idToken = "";
 
-// LED status
-#define LED_STATUS 2
-unsigned long ultimoPisca = 0;
-
-void IRAM_ATTR handleFall() {
-  // not used as interrupt here, but kept for future
-  quedaDetectada = true;
-}
-
-// quick LED blink
-void piscarLED(int vezes, int intervalo) {
-  for (int i = 0; i < vezes; i++) {
-    digitalWrite(LED_STATUS, HIGH);
-    delay(intervalo);
-    digitalWrite(LED_STATUS, LOW);
-    delay(intervalo);
-  }
-}
-
-// simple validation
-bool validarConfiguracao() {
-  bool valido = true;
-  if (String(ssid) == "SEU_WIFI_SSID") valido = false;
-  if (String(password) == "SUA_SENHA_WIFI") valido = false;
-  if (deviceId <= 0) valido = false;
-  return valido;
-}
-
-// ENVIAR DADOS PARA SUA API (opcional)
-void enviarQuedaParaServidor(float accX, float accY, float accZ, float accMag) {
-  if (WiFi.status() != WL_CONNECTED) return;
+bool loginFirebase()
+{
   HTTPClient http;
-  http.begin(serverUrl);
+  String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + String(API_KEY);
+
+  http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
   StaticJsonDocument<256> doc;
-  doc["device_id"] = deviceId;
-  doc["accel_x"] = accX;
-  doc["accel_y"] = accY;
-  doc["accel_z"] = accZ;
-  doc["timestamp"] = millis();
-  doc["wifi_signal"] = WiFi.RSSI();
+  doc["email"] = USER_EMAIL;
+  doc["password"] = USER_PASSWORD;
+  doc["returnSecureToken"] = true;
 
-  String payload;
-  serializeJson(doc, payload);
+  String body;
+  serializeJson(doc, body);
 
-  int code = http.POST(payload);
-  Serial.printf("Envio servidor, code=%d\n", code);
+  int code = http.POST(body);
+
+  if (code == 200)
+  {
+    String response = http.getString();
+    StaticJsonDocument<512> resJson;
+    deserializeJson(resJson, response);
+    idToken = resJson["idToken"].as<String>();
+
+    Serial.println("✔ Login Firebase OK");
+    Serial.println("Token:");
+    Serial.println(idToken);
+
+    http.end();
+    return true;
+  }
+
+  Serial.print("✖ Erro login Firebase: ");
+  Serial.println(code);
+  Serial.println(http.getString());
+
+  http.end();
+  return false;
+}
+
+// ======================================================
+// OBTER TIMESTAMP EM RFC3339 (DATA REAL)
+// ======================================================
+String getTimestampRFC3339()
+{
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo))
+  {
+    return "1970-01-01T00:00:00Z";
+  }
+
+  char buf[30];
+  strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
+  return String(buf);
+}
+
+// ======================================================
+// FUNÇÃO PARA ENVIAR DADOS DE QUEDA AO FIREBASE
+// ======================================================
+void enviarQuedaFirestore(float ax, float ay, float az, float mag)
+{
+  if (idToken == "")
+  {
+    Serial.println("❌ Sem token! Tentando logar...");
+    loginFirebase();
+    if (idToken == "")
+      return;
+  }
+
+  HTTPClient http;
+  http.begin(firestoreUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("Authorization", "Bearer " + idToken);
+
+  StaticJsonDocument<512> doc;
+
+  JsonObject fields = doc.createNestedObject("fields");
+
+  fields["deviceId"]["stringValue"] = deviceId;
+  fields["accX"]["doubleValue"] = ax;
+  fields["accY"]["doubleValue"] = ay;
+  fields["accZ"]["doubleValue"] = az;
+  fields["accMag"]["doubleValue"] = mag;
+  fields["wifiSignal"]["integerValue"] = WiFi.RSSI();
+
+  // AGORA SALVA DATA REAL !!!
+  fields["timestamp"]["stringValue"] = getTimestampRFC3339();
+
+  String json;
+  serializeJson(doc, json);
+
+  Serial.println("\n📤 Enviando para Firestore:");
+  Serial.println(json);
+
+  int code = http.POST(json);
+
+  Serial.printf("Código HTTP Firestore: %d\n", code);
+  Serial.println(http.getString());
+
   http.end();
 }
 
-// HTTP handlers
-void handleConnect() {
-  StaticJsonDocument<128> doc;
-  doc["status"] = "connected";
-  doc["deviceId"] = deviceId;
-  doc["wifi_signal"] = WiFi.RSSI();
-
-  String s;
-  serializeJson(doc, s);
-  server.send(200, "application/json", s);
-}
-
-void handleStatus() {
-  String msg = "ESP32 OK — IP: " + WiFi.localIP().toString();
-  server.send(200, "text/plain", msg);
-}
-
-void handleLatestFall() {
-  StaticJsonDocument<128> doc;
-  doc["deviceId"] = deviceId;
-  doc["hasFall"] = hasNewFall ? true : false;
-  doc["timestamp"] = lastFallTimestamp;
-  String s;
-  serializeJson(doc, s);
-  server.send(200, "application/json", s);
-}
-
-void handleAck() {
-  // client acknowledges fall; clear flag
-  hasNewFall = false;
-  lastFallTimestamp = 0;
-  server.send(200, "application/json", "{\"ok\":true}");
-}
-
-void setup() {
+// ======================================================
+// SETUP
+// ======================================================
+void setup()
+{
   Serial.begin(115200);
-  delay(500);
-  pinMode(LED_STATUS, OUTPUT);
-  digitalWrite(LED_STATUS, LOW);
 
-  Serial.println("\n🚨 Fall Detector iniciando...");
-
-  if (!validarConfiguracao()) {
-    Serial.println("Configuração inválida. Editar ssid/password/deviceId no código.");
-    while (1) {
-      piscarLED(3, 200);
-      delay(1000);
-    }
-  }
-
-  // connect Wi-Fi
   WiFi.begin(ssid, password);
   Serial.print("Conectando ao WiFi");
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 60) {
+  while (WiFi.status() != WL_CONNECTED)
+  {
     delay(500);
     Serial.print(".");
-    attempts++;
   }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println();
-    Serial.print("📶 WiFi conectado! IP: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println();
-    Serial.println("❌ Falha ao conectar WiFi");
-  }
+  Serial.println("\nWiFi conectado!");
 
-  // start I2C and MPU
+  // CONFIGURAÇÃO DO NTP (data real)
+  configTime(-3 * 3600, 0, "pool.ntp.org", "time.google.com");
+
+  Serial.println("Sincronizando horário...");
+  struct tm timeinfo;
+  while (!getLocalTime(&timeinfo))
+  {
+    Serial.println("Aguardando NTP...");
+    delay(500);
+  }
+  Serial.println("Horário sincronizado!");
+
+  // Login Firebase
+  loginFirebase();
+
+  // MPU
   Wire.begin(SDA_PIN, SCL_PIN);
-  if (mpu.begin() != 0) {
-    Serial.println("❌ Erro MPU6050!");
-    while (1) {}
-  }
+  mpu.begin();
   mpu.calcOffsets();
-  Serial.println("⚙️ MPU calibrado.");
-
-  // HTTP endpoints
-  server.on("/connect", HTTP_GET, handleConnect);
-  server.on("/status", HTTP_GET, handleStatus);
-  server.on("/latest_fall", HTTP_GET, handleLatestFall);
-  server.on("/ack", HTTP_POST, handleAck);
-  server.begin();
-  Serial.println("🌐 Servidor HTTP iniciado!");
+  Serial.println("MPU calibrado.");
 }
 
-void loop() {
-  server.handleClient();
-
+// ======================================================
+// LOOP PRINCIPAL
+// ======================================================
+void loop()
+{
   mpu.update();
-  float accX = mpu.getAccX();
-  float accY = mpu.getAccY();
-  float accZ = mpu.getAccZ();
-  float accMag = sqrt(accX*accX + accY*accY + accZ*accZ);
 
-  // detect fall by magnitude outside thresholds and interval
-  if ((accMag < THRESHOLD_MIN || accMag > THRESHOLD_MAX) && (millis() - ultimoEnvio > INTERVAL_ENVIO)) {
+  float ax = mpu.getAccX();
+  float ay = mpu.getAccY();
+  float az = mpu.getAccZ();
+
+  float mag = sqrt(ax * ax + ay * ay + az * az);
+
+  // CONTINUA USANDO O MILLIS PARA INTERVALO (OK!)
+  if ((mag < THRESHOLD_MIN || mag > THRESHOLD_MAX) &&
+      (millis() - ultimoEnvio > intervalo))
+  {
+
     Serial.println("\n🚨 QUEDA DETECTADA!");
-    Serial.printf("accMag=%.3f x=%.3f y=%.3f z=%.3f\n", accMag, accX, accY, accZ);
+    Serial.printf("Mag=%.2f X=%.2f Y=%.2f Z=%.2f\n", mag, ax, ay, az);
 
-    // set shared flag & timestamp for app to read
-    lastFallTimestamp = millis();
-    hasNewFall = true;
-
-    // optional: blink LED and try send to external server
-    piscarLED(3, 100);
-    enviarQuedaParaServidor(accX, accY, accZ, accMag);
+    enviarQuedaFirestore(ax, ay, az, mag);
 
     ultimoEnvio = millis();
-  }
-
-  // tiny alive blink
-  if (millis() - ultimoPisca > 5000) {
-    digitalWrite(LED_STATUS, HIGH);
-    delay(40);
-    digitalWrite(LED_STATUS, LOW);
-    ultimoPisca = millis();
   }
 
   delay(100);
