@@ -1,129 +1,50 @@
 // app/(tabs)/index.js
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-import { auth, db } from "../../services/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
+import { authAPI, utils } from '../../services/api';
 
 export default function HomeScreen() {
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState(null);
-
-  // DADOS DO ESP32
-  const [deviceStatus, setDeviceStatus] = useState({
-    online: false,
-    battery: 0,
-    wifi: 0,
-    last_update: null,
-    last_fall: null,
-    monitoring: false,
-  });
-
-  // =====================================================
-  // 🔐 GARANTE QUE O USUÁRIO ESTÁ AUTENTICADO
-  // =====================================================
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      await loadUserData(user.uid);
-      listenToESP32Status(user.uid);
-    });
-
-    return () => unsub();
+    loadUserData();
   }, []);
 
-  // =====================================================
-  // 👤 CARREGAR DADOS DO USUÁRIO
-  // =====================================================
-  const loadUserData = async (uid) => {
+  const loadUserData = async () => {
     try {
-      const ref = doc(db, "usuarios", uid);
-      const snap = await getDoc(ref);
-
-      if (snap.exists()) {
-        const data = snap.data();
-        setUserData(data);
-        await AsyncStorage.setItem("userData", JSON.stringify(data));
-      } else {
-        console.warn("⚠ Usuário não existe no Firestore.");
-      }
-    } catch (err) {
-      console.error("Erro ao carregar usuário:", err);
-
-      // fallback offline
-      const cached = await AsyncStorage.getItem("userData");
-      if (cached) setUserData(JSON.parse(cached));
-
-      Alert.alert("Erro", "Não foi possível carregar os dados.");
+      const data = await utils.getUserData();
+      console.log('👤 Dados do usuário carregados:', data);
+      setUserData(data);
+    } catch (error) {
+      console.error('❌ Erro ao carregar dados do usuário:', error);
+      Alert.alert('Erro', 'Não foi possível carregar seus dados');
     } finally {
       setLoading(false);
     }
   };
 
-  // =====================================================
-  // 🔌 ESCUTAR STATUS DO ESP32 (com tratamento de erro)
-  // =====================================================
-  const listenToESP32Status = (uid) => {
-    const ref = doc(db, "dispositivos", uid);
-
-    return onSnapshot(
-      ref,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          setDeviceStatus(snapshot.data());
-        }
-      },
-      (error) => {
-        console.error("❌ Erro no snapshot do dispositivo:", error);
-
-        if (error.code === "permission-denied") {
-          Alert.alert(
-            "Permissão Negada",
-            "O dispositivo não está autorizado a acessar esses dados."
-          );
-        }
-      }
+  const handleLogout = async () => {
+    Alert.alert(
+      'Sair',
+      'Deseja realmente sair do aplicativo?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sair',
+          style: 'destructive',
+          onPress: async () => {
+            await authAPI.logout();
+            router.replace('/(auth)/login');
+          },
+        },
+      ]
     );
   };
 
-  // =====================================================
-  // 🚪 LOGOUT
-  // =====================================================
-  const handleLogout = () => {
-    Alert.alert("Sair", "Deseja realmente sair?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: async () => {
-          await signOut(auth);
-          await AsyncStorage.clear();
-          router.replace("/login");
-        },
-      },
-    ]);
-  };
-
-  // Loading
-  if (loading || !userData) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -132,169 +53,239 @@ export default function HomeScreen() {
     );
   }
 
-  const formatDate = (iso) => {
-    if (!iso) return "-";
-    return new Date(iso).toLocaleString("pt-BR");
-  };
-
   return (
     <ScrollView style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <Text style={styles.title}>Olá, {userData.nome} 👋</Text>
-        <Text style={styles.subtitle}>
-          Seu dispositivo está {deviceStatus.online ? "online" : "offline"}
-        </Text>
-
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Text style={styles.title}>Olá, {userData?.nome || 'Usuário'}!</Text>
+        <Text style={styles.subtitle}>Tudo está funcionando bem</Text>
+        <TouchableOpacity 
+          style={styles.logoutButton}
+          onPress={handleLogout}
+        >
           <Text style={styles.logoutButtonText}>Sair 🚪</Text>
         </TouchableOpacity>
       </View>
 
-      {/* COMANDOS */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Comandos Rápidos</Text>
-
-        <TouchableOpacity style={styles.quickButton}>
-          <Text style={styles.quickText}>✅ Estou Bem</Text>
+        
+        <TouchableOpacity style={styles.quickAction}>
+          <Text style={styles.quickActionText}>✅ Estou Bem</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.quickButton}>
-          <Text style={styles.quickText}>🆘 Pedir Ajuda</Text>
+        <TouchableOpacity style={styles.quickAction}>
+          <Text style={styles.quickActionText}>🆘 Pedir Ajuda</Text>
         </TouchableOpacity>
+
+        <View style={styles.locationCard}>
+          <Text style={styles.locationTitle}>📍 Localização</Text>
+          <Text style={styles.locationAddress}>Av. Paulista, 1578 - São Paulo, SP</Text>
+          <Text style={styles.locationNote}>Localização compartilhada apenas com contatos de emergência</Text>
+        </View>
       </View>
 
-      {/* STATUS DO DISPOSITIVO */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Status do dispositivo</Text>
-
-        <View style={styles.statusRow}>
+        <Text style={styles.sectionTitle}>Status do Dispositivo</Text>
+        <View style={styles.statusContainer}>
           <View style={styles.statusItem}>
             <Text style={styles.statusLabel}>Bateria</Text>
-            <Text style={styles.statusValue}>{deviceStatus.battery}%</Text>
+            <Text style={styles.statusValue}>85%</Text>
           </View>
-
           <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>WiFi</Text>
-            <Text style={styles.statusValue}>{deviceStatus.wifi} dBm</Text>
+            <Text style={styles.statusLabel}>Conexão</Text>
+            <Text style={[styles.statusValue, styles.connected]}>Ativa</Text>
           </View>
-
           <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Monitoramento</Text>
-            <Text style={styles.statusValue}>
-              {deviceStatus.monitoring ? "Ativo" : "Inativo"}
-            </Text>
+            <Text style={styles.statusLabel}>Monitor</Text>
+            <Text style={[styles.statusValue, styles.monitoring]}>Ativo</Text>
           </View>
         </View>
-
-        <Text style={styles.infoText}>
-          Última atualização: {formatDate(deviceStatus.last_update)}
-        </Text>
-        <Text style={styles.infoText}>
-          Última queda: {formatDate(deviceStatus.last_fall)}
-        </Text>
       </View>
 
-      {/* ATIVIDADE */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Atividade Recente</Text>
-
-        {deviceStatus.last_fall && (
-          <View style={styles.activityItem}>
-            <Text style={styles.activityText}>🚨 Queda detectada</Text>
-            <Text style={styles.activityTime}>
-              {formatDate(deviceStatus.last_fall)}
-            </Text>
-          </View>
-        )}
-
         <View style={styles.activityItem}>
-          <Text style={styles.activityText}>Dispositivo atualizado</Text>
-          <Text style={styles.activityTime}>
-            {formatDate(deviceStatus.last_update)}
-          </Text>
+          <Text style={styles.activityText}>Status "Estou Bem" enviado</Text>
+          <Text style={styles.activityTime}>Há 5 minutos</Text>
+        </View>
+        <View style={styles.activityItem}>
+          <Text style={styles.activityText}>Dispositivo encontrado</Text>
+          <Text style={styles.activityTime}>Há 15 minutos</Text>
+        </View>
+        <View style={styles.activityItem}>
+          <Text style={styles.activityText}>Bateria carregada completamente</Text>
+          <Text style={styles.activityTime}>Há 2 horas</Text>
         </View>
       </View>
+
+      {__DEV__ && userData && (
+        <View style={styles.devInfo}>
+          <Text style={styles.devTitle}>📋 Dados do Usuário</Text>
+          <Text style={styles.devText}>ID: {userData.id}</Text>
+          <Text style={styles.devText}>Email: {userData.email}</Text>
+          <Text style={styles.devText}>CPF: {userData.cpf}</Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
 
-// =====================================================
-// 🎨 ESTILOS
-// =====================================================
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f5f5" },
-
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
-
-  loadingText: { marginTop: 10, color: "#555" },
-
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6c757d',
+  },
   header: {
     padding: 20,
-    backgroundColor: "#fff",
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd",
+    borderBottomColor: '#e0e0e0',
   },
-  title: { fontSize: 24, fontWeight: "bold" },
-  subtitle: { marginTop: 5, fontSize: 15, color: "#666" },
-
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 5,
+  },
   logoutButton: {
-    marginTop: 10,
-    padding: 8,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#dc3545",
+    borderColor: '#dc3545',
   },
   logoutButtonText: {
-    color: "#dc3545",
-    fontWeight: "bold",
+    color: '#dc3545',
+    fontSize: 14,
+    fontWeight: '600',
   },
-
   section: {
+    backgroundColor: '#fff',
     margin: 10,
-    backgroundColor: "#fff",
     padding: 15,
     borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: 'bold',
     marginBottom: 15,
+    color: '#333',
   },
-
-  quickButton: {
-    padding: 14,
-    backgroundColor: "#f8f9fa",
-    borderRadius: 10,
+  quickAction: {
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#ddd",
-    marginBottom: 10,
+    borderColor: '#e9ecef',
   },
-  quickText: { fontSize: 16, fontWeight: "500" },
-
-  statusRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
+  quickActionText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
-
-  statusItem: { alignItems: "center" },
-  statusLabel: { fontSize: 12, color: "#777" },
-  statusValue: { fontSize: 15, fontWeight: "bold" },
-
-  infoText: { marginTop: 5, fontSize: 13, color: "#555" },
-
+  locationCard: {
+    backgroundColor: '#e7f3ff',
+    padding: 15,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  locationTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 5,
+  },
+  locationNote: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f9fa',
+    padding: 15,
+    borderRadius: 8,
+  },
+  statusItem: {
+    alignItems: 'center',
+  },
+  statusLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 5,
+  },
+  statusValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  connected: {
+    color: '#28a745',
+  },
+  monitoring: {
+    color: '#28a745',
+  },
   activityItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    borderBottomColor: '#f0f0f0',
   },
-  activityText: { fontSize: 15 },
-  activityTime: { fontSize: 12, color: "#666" },
+  activityText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#666',
+  },
+  devInfo: {
+    margin: 10,
+    padding: 15,
+    backgroundColor: '#e7f3ff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  devTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginBottom: 10,
+  },
+  devText: {
+    fontSize: 12,
+    color: '#495057',
+    marginVertical: 2,
+  },
 });

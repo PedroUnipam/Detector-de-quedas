@@ -1,0 +1,45 @@
+// Top-level build file
+
+buildscript {
+    ext {
+        // 🔥 Força JAVA 17 no projeto inteiro
+        JAVA_HOME = "C:/Program Files/Java/jdk-17"
+
+        // 🔥 Kotlin suportado pelo Expo SDK 54
+        kotlinVersion = "2.1.20"
+    }
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        // 🔥 Plugin Android compatível com React Native 0.76 + Expo SDK 54
+        classpath("com.android.tools.build:gradle:8.2.1")
+
+        // 🔥 Kotlin compatível
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+
+        // React Native plugin
+        classpath("com.facebook.react:react-native-gradle-plugin")
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://www.jitpack.io" }
+    }
+}
+
+// 🔥 Força Gradle a usar Java 17 em todas as tasks Java
+tasks.withType(JavaCompile).configureEach {
+    options.fork = true
+    options.forkOptions.javaHome = file("C:/Program Files/Java/jdk-17")
+}
+
+// Aplicação dos plugins RAIZ
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"
