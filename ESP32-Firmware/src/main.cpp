@@ -1,54 +1,52 @@
 #include <WiFi.h>
-#include <WiFiClient.h>
 #include <WebServer.h>
-#include <Preferences.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "MPU6050_light.h"
 #include <Wire.h>
 #include <time.h>
 
-// =====================================================
-// PREFERENCES (SALVAR WIFI)
-// =====================================================
-Preferences prefs;
+// ===========================
+// CONFIG WiFi - DESENVOLVIMENTO
+// ===========================
+const char* ssid     = "Loja Setta";      // <<< SUA REDE NORMAL
+const char* password = "seTs@2022";       // <<< SENHA DA REDE
 
-// =====================================================
-// HTTP SERVER & MODO CONFIG (SoftAP)
-// =====================================================
-WebServer server(80);
-bool setupMode = false;
-bool serverStarted = false;
-
-// =====================================================
+// ===========================
 // FIREBASE
-// =====================================================
+// ===========================
 #define API_KEY "AIzaSyCk7yZZXAyAnLgWqjYWmfJXJgp84LMa4tk"
 #define USER_EMAIL "esp32-device-1@system.com"
 #define USER_PASSWORD "esp32_firmware@2025"
 #define PROJECT_ID "falldetector-3efce"
 
-String firestoreUrl = "https://firestore.googleapis.com/v1/projects/" PROJECT_ID "/databases/(default)/documents/quedas";
+String firestoreUrl =
+  "https://firestore.googleapis.com/v1/projects/" PROJECT_ID "/databases/(default)/documents/quedas";
 String idToken = "";
 
-// =====================================================
+// ===========================
 // MPU6050
-// =====================================================
+// ===========================
 #define SDA_PIN 21
 #define SCL_PIN 22
 MPU6050 mpu(Wire);
 
 float THRESHOLD_MOVIMENTO = 1.6;
-float THRESHOLD_IMPACTO = 2.2;
-float THRESHOLD_QUEDA = 2.8;
+float THRESHOLD_IMPACTO  = 2.2;
+float THRESHOLD_QUEDA    = 2.8;
 
 unsigned long ultimoEnvio = 0;
-unsigned long intervalo = 3500;
+unsigned long intervalo   = 3500;
 String deviceId = "esp32-1";
 
-// =====================================================
+// ===========================
+// HTTP SERVER
+// ===========================
+WebServer server(80);
+
+// ===========================
 // LOGIN FIREBASE
-// =====================================================
+// ===========================
 bool loginFirebase() {
   HTTPClient http;
   String url = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + String(API_KEY);
@@ -83,9 +81,9 @@ bool loginFirebase() {
   return false;
 }
 
-// =====================================================
+// ===========================
 // TIMESTAMP
-// =====================================================
+// ===========================
 String getTimestampBrazil() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) return "1970-01-01T00:00:00-03:00";
@@ -95,9 +93,9 @@ String getTimestampBrazil() {
   return String(buf);
 }
 
-// =====================================================
+// ===========================
 // ENVIO FIRESTORE
-// =====================================================
+// ===========================
 void enviarQuedaFirestore(float ax, float ay, float az, float mag, int fallLevel) {
   if (idToken == "") loginFirebase();
 
@@ -130,15 +128,11 @@ void enviarQuedaFirestore(float ax, float ay, float az, float mag, int fallLevel
   http.end();
 }
 
-// =====================================================
+// ===========================
 // HTTP HANDLERS
-// =====================================================
+// ===========================
 void handleRoot() {
-  if (setupMode) {
-    server.send(200, "text/plain", "ESP32 Config Mode - use POST /config");
-  } else {
-    server.send(200, "text/plain", "ESP32 Online - use /status ou /reset_wifi");
-  }
+  server.send(200, "text/plain", "ESP32 Online - use /status ou /reset_wifi");
 }
 
 void handleStatus() {
@@ -153,165 +147,56 @@ void handleStatus() {
 }
 
 void handleResetWifi() {
-  // Limpa credenciais salvas e reinicia
-  prefs.clear();
-  server.send(200, "text/plain", "WiFi resetado. Reiniciando em modo configuracao...");
-  Serial.println("🧹 WiFi resetado via /reset_wifi. Reiniciando...");
-  delay(1000);
-  ESP.restart();
+  server.send(200, "text/plain", "Reset solicitado (placeholder)");
+  Serial.println("Reset WiFi chamado - aqui você poderia apagar prefs no futuro");
 }
 
-void handleConfig() {
-  if (!setupMode) {
-    server.send(400, "text/plain", "Nao estou em modo configuracao");
-    return;
+// ===========================
+// SETUP
+// ===========================
+void setup() {
+  Serial.begin(115200);
+
+  // WiFi STA na rede normal
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Conectando ao WiFi ");
+  Serial.println(ssid);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
+  Serial.println("\n✔ WiFi conectado!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
 
-  if (!server.hasArg("plain")) {
-    server.send(400, "text/plain", "Body ausente");
-    return;
-  }
+  // NTP
+  configTime(-3 * 3600, 0, "pool.ntp.org", "time.google.com");
 
-  StaticJsonDocument<256> doc;
-  DeserializationError err = deserializeJson(doc, server.arg("plain"));
+  // Firebase
+  loginFirebase();
 
-  if (err) {
-    server.send(400, "text/plain", "JSON invalido");
-    return;
-  }
+  // MPU
+  Wire.begin(SDA_PIN, SCL_PIN);
+  mpu.begin();
+  mpu.calcOffsets();
+  Serial.println("MPU calibrado.");
 
-  String ssid = doc["ssid"].as<String>();
-  String pass = doc["password"].as<String>();
-
-  if (ssid == "" || pass == "") {
-    server.send(400, "text/plain", "SSID/Senha invalidos");
-    return;
-  }
-
-  prefs.putString("ssid", ssid);
-  prefs.putString("pass", pass);
-
-  server.send(200, "text/plain", "OK — Reiniciando...");
-
-  Serial.println("📡 SSID recebido: " + ssid);
-  Serial.println("🔑 Senha salva.");
-
-  delay(1000);
-  ESP.restart();
-}
-
-// =====================================================
-// CONFIGURAR ROTAS HTTP
-// =====================================================
-void setupHttpServer() {
-  if (serverStarted) return;
-
+  // HTTP
   server.on("/", handleRoot);
   server.on("/status", HTTP_GET, handleStatus);
-  server.on("/reset_wifi", HTTP_ANY, handleResetWifi);
-  server.on("/config", HTTP_POST, handleConfig);
-
+  server.on("/reset_wifi", HTTP_POST, handleResetWifi);
   server.begin();
-  serverStarted = true;
   Serial.println("🌐 HTTP server iniciado");
 }
 
-// =====================================================
-// WIFI SALVO
-// =====================================================
-bool connectSavedWiFi() {
-  String ssid = prefs.getString("ssid", "");
-  String pass = prefs.getString("pass", "");
-
-  if (ssid == "") {
-    Serial.println("⚠ Nenhuma rede salva");
-    return false;
-  }
-
-  Serial.println("Conectando à rede salva:");
-  Serial.println("SSID: " + ssid);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid.c_str(), pass.c_str());
-
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 8000) {
-    delay(300);
-    Serial.print(".");
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✔ Wi-Fi conectado!");
-    Serial.print("IP: ");
-    Serial.println(WiFi.localIP());
-    return true;
-  }
-
-  Serial.println("\n⛔ Falha ao conectar no Wi-Fi salvo");
-  return false;
-}
-
-// =====================================================
-// SOFTAP CONFIG
-// =====================================================
-void startSoftAP() {
-  setupMode = true;
-
-  WiFi.mode(WIFI_AP);
-  WiFi.softAP("ESP-Setup", "12345678");
-
-  IPAddress ip = WiFi.softAPIP();
-  Serial.println("\n⚙ SOFTAP ATIVO!");
-  Serial.print("Rede: ESP-Setup  Senha: 12345678  IP: ");
-  Serial.println(ip);
-
-  setupHttpServer();
-}
-
-// =====================================================
-// SETUP
-// =====================================================
-void setup() {
-  Serial.begin(115200);
-  prefs.begin("wifi", false);
-
-  // Tenta conectar ao Wi-Fi salvo
-  if (!connectSavedWiFi()) {
-    Serial.println("Entrando em modo configuracao (SoftAP)...");
-    startSoftAP();
-  } else {
-    // Modo normal
-    setupMode = false;
-    setupHttpServer(); // server acessível em modo STA também
-
-    // NTP
-    configTime(-3 * 3600, 0, "pool.ntp.org", "time.google.com");
-
-    loginFirebase();
-
-    Wire.begin(SDA_PIN, SCL_PIN);
-    mpu.begin();
-    mpu.calcOffsets();
-    Serial.println("MPU calibrado.");
-  }
-}
-
-// =====================================================
+// ===========================
 // LOOP
-// =====================================================
+// ===========================
 void loop() {
-  // Sempre atender HTTP (tanto em STA quanto em AP)
-  if (serverStarted) {
-    server.handleClient();
-  }
+  server.handleClient();
 
-  // Se estiver em modo configuração, não faz lógica de queda
-  if (setupMode) {
-    delay(10);
-    return;
-  }
-
-  // Modo normal: detecção de queda
   mpu.update();
 
   float ax = mpu.getAccX();
@@ -321,8 +206,8 @@ void loop() {
 
   int fallLevel = 0;
   if (mag > THRESHOLD_MOVIMENTO) fallLevel = 1;
-  if (mag > THRESHOLD_IMPACTO) fallLevel = 2;
-  if (mag > THRESHOLD_QUEDA) fallLevel = 3;
+  if (mag > THRESHOLD_IMPACTO)  fallLevel = 2;
+  if (mag > THRESHOLD_QUEDA)    fallLevel = 3;
 
   bool quedaReal = fallLevel >= 2;
 
