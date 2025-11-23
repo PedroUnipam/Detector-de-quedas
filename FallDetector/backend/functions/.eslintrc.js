@@ -1,4 +1,4 @@
-/*module.exports = {
+module.exports = {
   env: {
     es6: true,
     node: true,
@@ -17,7 +17,7 @@
   },
   overrides: [
     {
-      files: ["**//**.spec.*"],
+      files: ["**/*.spec.*"],
       env: {
         mocha: true,
       },
@@ -26,4 +26,3 @@
   ],
   globals: {},
 };
-*/

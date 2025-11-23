@@ -8,13 +8,16 @@
     "scheme": "falldetector",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
+    "androidMode": "default",
     "ios": {
       "supportsTablet": true
     },
-
     "android": {
-      "permissions": ["INTERNET"],
+      "googleServicesFile": "./android/app/google-services.json",
+      "package": "com.anonymous.FallDetector",
+      "permissions": [
+        "INTERNET"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -22,15 +25,12 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.FallDetector"
+      "predictiveBackGestureEnabled": false
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-
     "plugins": [
       "expo-router",
       [
@@ -46,10 +46,16 @@
         }
       ]
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2880f5ae-7ae2-4edf-ba39-9d9e397c6425"
+      }
+    },
+    "owner": "thallysgmb"
   }
 }
