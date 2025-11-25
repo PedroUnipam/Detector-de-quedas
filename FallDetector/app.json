@@ -50,12 +50,12 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
+    "owner": "pedrosousa82",
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "2880f5ae-7ae2-4edf-ba39-9d9e397c6425"
+        "projectId": "d77240e9-7425-4478-9fd2-00af72a87422"
       }
-    },
-    "owner": "thallysgmb"
+    }
   }
 }
