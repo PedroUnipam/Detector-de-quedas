@@ -1,5 +1,7 @@
 // app/(tabs)/index.js
+
 import React, { useState, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import {
   View,
   Text,
@@ -12,6 +14,9 @@ import {
 import { useRouter } from "expo-router";
 import { authAPI, utils } from "../../services/api";
 import { getQuedasFromFirestore } from "../../services/firestoreQuedas";
+import HomeCuidador from "../../components/HomeCuidador";
+import { auth, db } from "../../services/firebase";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 // ==========================
 // Ajuda visual para intensidade
@@ -35,25 +40,32 @@ const formatHoraCurta = (date) => {
 
 export default function HomeScreen() {
   const [userData, setUserData] = useState(null);
+  const [isCuidador, setIsCuidador] = useState(false);
   const [resumoQuedas, setResumoQuedas] = useState({
     totalHoje: 0,
     totalSemana: 0,
     ultimaQueda: null,
   });
   const [loading, setLoading] = useState(true);
-
+  const [error, setError] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
+    console.log("🚀 HomeScreen montado, iniciando loadAll...");
     loadAll();
   }, []);
 
   const loadAll = async () => {
     try {
+      console.log("📝 Iniciando loadAll...");
       setLoading(true);
-      await Promise.all([loadUserData(), loadResumoQuedas()]);
+      setError(null);
+      await loadUserData();
+      console.log("✅ loadAll concluído com sucesso");
     } catch (err) {
-      console.error("Erro geral na Home:", err);
+      console.error("❌ Erro geral na Home:", err);
+      setError(err.message);
+      Alert.alert("Erro", err.message || "Erro ao carregar dados");
     } finally {
       setLoading(false);
     }
@@ -61,20 +73,110 @@ export default function HomeScreen() {
 
   const loadUserData = async () => {
     try {
-      const data = await utils.getUserData();
-      console.log("👤 Dados do usuário carregados:", data);
-      setUserData(data);
+      console.log("🔐 Iniciando loadUserData...");
+      const user = auth.currentUser;
+      console.log("👤 Current user:", user ? user.uid : "NULL");
+
+      if (!user) {
+        console.log("⚠️ Usuário não autenticado, redirecionando...");
+        Alert.alert("Erro", "Usuário não autenticado");
+        router.replace("/(auth)/login");
+        return;
+      }
+
+      console.log("🔍 Buscando documento do usuário no Firestore...");
+      const userRef = doc(db, "usuarios", user.uid);
+      const usuarioSnap = await getDoc(userRef);
+
+      if (!usuarioSnap.exists()) {
+        console.log("❌ Documento do usuário não encontrado");
+        Alert.alert("Erro", "Dados do usuário não encontrados");
+        return;
+      }
+
+      const usuarioData = usuarioSnap.data();
+      console.log("📋 Dados do usuário carregados:", {
+        nome: usuarioData.nome,
+        email: usuarioData.email,
+        tipoPessoa: usuarioData.tipoPessoa
+      });
+
+      const userData = {
+        id: user.uid,
+        uid: user.uid,
+        nome: usuarioData.nome,
+        email: usuarioData.email,
+        cpf: usuarioData.cpf,
+        telefone: usuarioData.telefone,
+        tipoPessoa: usuarioData.tipoPessoa,
+        dataNascimento: usuarioData.dataNascimento,
+      };
+
+      setUserData(userData);
+
+      console.log("=================================================");
+      console.log("🔍 VERIFICAÇÃO DETALHADA - TIPO DE USUÁRIO");
+      console.log("=================================================");
+      console.log("📋 Dados completos do Firestore:", JSON.stringify(usuarioData, null, 2));
+      console.log("📌 Campo 'tipoPessoa':", usuarioData.tipoPessoa);
+      console.log("📌 Tipo do campo:", typeof usuarioData.tipoPessoa);
+      console.log("📌 Comparação direta:", usuarioData.tipoPessoa === "cuidador");
+
+      // MÉTODO 1: Verificar pelo campo tipoPessoa (mais confiável)
+      const ehCuidadorPorTipo = usuarioData.tipoPessoa === "cuidador";
+      console.log(`📊 É cuidador por tipoPessoa? ${ehCuidadorPorTipo ? "SIM ✅" : "NÃO ❌"}`);
+
+      // MÉTODO 2: Verificar na coleção cuidadores (backup)
+      console.log("\n🔍 Verificando na coleção 'cuidadores'...");
+      const cuidadoresRef = collection(db, "cuidadores");
+      const cuidadorQuery = query(cuidadoresRef, where("uid", "==", user.uid));
+      const cuidadorSnap = await getDocs(cuidadorQuery);
+
+      const ehCuidadorPorColecao = !cuidadorSnap.empty;
+      console.log(`📊 Quantidade de documentos encontrados: ${cuidadorSnap.size}`);
+      console.log(`📊 É cuidador por coleção? ${ehCuidadorPorColecao ? "SIM ✅" : "NÃO ❌"}`);
+
+      if (!cuidadorSnap.empty) {
+        cuidadorSnap.forEach((doc) => {
+          console.log("📄 Documento encontrado na coleção cuidadores:");
+          console.log("   - ID do documento:", doc.id);
+          console.log("   - Dados:", JSON.stringify(doc.data(), null, 2));
+        });
+      } else {
+        console.log("❌ Nenhum documento encontrado na coleção cuidadores para este UID");
+      }
+
+      // Usar AMBOS os critérios para determinar se é cuidador
+      // Prioriza o tipoPessoa, mas aceita qualquer um dos dois
+      const ehCuidador = ehCuidadorPorTipo || ehCuidadorPorColecao;
+
+      console.log("=================================================");
+      console.log(`🎯 DECISÃO FINAL: ${ehCuidador ? "É CUIDADOR ✅" : "É PACIENTE ❌"}`);
+      console.log("=================================================");
+
+      setIsCuidador(ehCuidador);
+
+      // Se for usuário/paciente, carregar quedas
+      if (!ehCuidador) {
+        console.log("📊 Usuário é PACIENTE, carregando quedas...");
+        await loadResumoQuedas();
+      } else {
+        console.log("✅ Usuário é CUIDADOR, NÃO carrega quedas");
+      }
+
     } catch (error) {
-      console.error("❌ Erro ao carregar dados do usuário:", error);
-      Alert.alert("Erro", "Não foi possível carregar seus dados");
+      console.error("❌ Erro em loadUserData:", error);
+      throw error;
     }
   };
 
   const loadResumoQuedas = async () => {
     try {
-      const quedas = await getQuedasFromFirestore(); // já usado na History
+      console.log("📊 Carregando resumo de quedas...");
+      const quedas = await getQuedasFromFirestore();
 
       if (!quedas || quedas.length === 0) {
+        console.log("ℹ️ Nenhuma queda encontrada");
         setResumoQuedas({
           totalHoje: 0,
           totalSemana: 0,
@@ -83,7 +185,8 @@ export default function HomeScreen() {
         return;
       }
 
-      // Ordena da mais recente para a mais antiga
+      console.log(`📊 ${quedas.length} quedas encontradas`);
+
       const ordenadas = [...quedas].sort(
         (a, b) => new Date(b.date) - new Date(a.date)
       );
@@ -101,6 +204,8 @@ export default function HomeScreen() {
         if (agora - d <= seteDiasMs) totalSemana++;
       });
 
+      console.log(`📊 Resumo: ${totalHoje} hoje, ${totalSemana} na semana`);
+
       setResumoQuedas({
         totalHoje,
         totalSemana,
@@ -108,7 +213,6 @@ export default function HomeScreen() {
       });
     } catch (error) {
       console.error("❌ Erro ao carregar resumo de quedas:", error);
-      // Não quebra a tela, só zera o resumo
       setResumoQuedas({
         totalHoje: 0,
         totalSemana: 0,
@@ -145,7 +249,9 @@ export default function HomeScreen() {
     );
   };
 
+  // Tela de loading
   if (loading) {
+    console.log("⏳ Renderizando tela de loading...");
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -154,6 +260,33 @@ export default function HomeScreen() {
     );
   }
 
+  // Tela de erro
+  if (error) {
+    console.log("❌ Renderizando tela de erro:", error);
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>❌ {error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={loadAll}>
+          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ==========================================
+  // 🔀 RENDERIZAÇÃO CONDICIONAL POR TIPO
+  // ==========================================
+
+  console.log(`🎨 Renderizando tela... É cuidador? ${isCuidador}`);
+
+  // Se o usuário é cuidador, mostra APENAS a tela de cuidador
+  if (isCuidador) {
+    console.log("✅ 👨‍⚕️ Renderizando TELA DE CUIDADOR");
+    return <HomeCuidador userData={userData} />;
+  }
+
+  // Caso contrário, mostra a tela de PACIENTE
+  console.log("✅ 👤 Renderizando TELA DE PACIENTE");
   const { totalHoje, totalSemana, ultimaQueda } = resumoQuedas;
 
   return (
@@ -166,16 +299,14 @@ export default function HomeScreen() {
             ? "Nenhuma queda registrada hoje."
             : `Foram registradas ${totalHoje} queda(s) hoje.`}
         </Text>
-
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Sair 🚪</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Comandos Rápidos */}
+      {/* Comandos Rápidos - APENAS PARA PACIENTES */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Comandos Rápidos</Text>
-
         <TouchableOpacity style={styles.quickAction} onPress={handleEstouBem}>
           <Text style={styles.quickActionText}>✅ Estou Bem</Text>
           <Text style={styles.quickActionHint}>
@@ -201,10 +332,9 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Resumo de Quedas (dados reais da coleção "quedas") */}
+      {/* Resumo de Quedas */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Resumo de Quedas</Text>
-
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Hoje</Text>
@@ -234,7 +364,7 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Status do Dispositivo (simulado) */}
+      {/* Status do Dispositivo */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Status do Dispositivo</Text>
         <View style={styles.statusContainer}>
@@ -252,15 +382,13 @@ export default function HomeScreen() {
           </View>
         </View>
         <Text style={styles.deviceNote}>
-          🔧 Esses dados ainda são simulados e serão integrados ao ESP32 na
-          versão final.
+          🔧 Esses dados ainda são simulados e serão integrados ao ESP32.
         </Text>
       </View>
 
-      {/* Atividade Recente (mistura de simulado + resumo) */}
+      {/* Atividade Recente */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Atividade Recente</Text>
-
         {ultimaQueda && (
           <View style={styles.activityItem}>
             <Text style={styles.activityText}>
@@ -271,26 +399,27 @@ export default function HomeScreen() {
             </Text>
           </View>
         )}
-
         <View style={styles.activityItem}>
           <Text style={styles.activityText}>Status "Estou Bem" enviado</Text>
           <Text style={styles.activityTime}>Simulado</Text>
         </View>
-
         <View style={styles.activityItem}>
           <Text style={styles.activityText}>Dispositivo encontrado</Text>
           <Text style={styles.activityTime}>Simulado</Text>
         </View>
       </View>
 
-      {__DEV__ && userData && (
-        <View style={styles.devInfo}>
-          <Text style={styles.devTitle}>📋 Dados do Usuário (DEV)</Text>
-          <Text style={styles.devText}>ID: {userData.id}</Text>
-          <Text style={styles.devText}>Email: {userData.email}</Text>
-          <Text style={styles.devText}>CPF: {userData.cpf}</Text>
-        </View>
-      )}
+      {/* Info de Debug */}
+      <View style={styles.devInfo}>
+        <Text style={styles.devTitle}>🐛 DEBUG INFO</Text>
+        <Text style={styles.devText}>ID: {userData?.id}</Text>
+        <Text style={styles.devText}>UID: {userData?.uid}</Text>
+        <Text style={styles.devText}>Email: {userData?.email}</Text>
+        <Text style={styles.devText}>Tipo Pessoa: {userData?.tipoPessoa}</Text>
+        <Text style={[styles.devText, styles.devImportant]}>
+          É CUIDADOR: {isCuidador ? "SIM ✅" : "NÃO ❌"}
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -305,11 +434,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#f5f5f5",
+    padding: 20,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: "#6c757d",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#dc3545",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
   header: {
     padding: 20,
@@ -499,20 +646,28 @@ const styles = StyleSheet.create({
   devInfo: {
     margin: 10,
     padding: 15,
-    backgroundColor: "#e7f3ff",
+    backgroundColor: "#fff3cd",
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#007AFF",
+    borderWidth: 2,
+    borderColor: "#ffc107",
   },
   devTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#007AFF",
+    color: "#856404",
     marginBottom: 10,
   },
   devText: {
-    fontSize: 12,
-    color: "#495057",
+    fontSize: 13,
+    color: "#856404",
     marginVertical: 2,
+  },
+  devImportant: {
+    fontSize: 15,
+    fontWeight: "bold",
+    marginTop: 8,
+    backgroundColor: "#fff",
+    padding: 8,
+    borderRadius: 5,
   },
 });

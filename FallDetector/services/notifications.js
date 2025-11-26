@@ -1,20 +1,37 @@
 import * as Notifications from "expo-notifications";
-import { collection, doc, setDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
-export async function registerPushToken(userId) {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== "granted") return;
+// Registra o token Expo e salva no Firestore
+export async function registerExpoToken(userId) {
+  try {
+    // Solicita permissão
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") {
+      console.log("❌ Permissão de notificação negada");
+      return null;
+    }
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
-  console.log("Expo token:", token);
+    // Obtém token Expo
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    console.log("📱 Token Expo:", token);
 
-  // Salva o token por usuário
-  await setDoc(
-    doc(collection(db, "expoTokens"), userId),
-    { token },
-    { merge: true }
-  );
+    // Salva no Firestore
+    await setDoc(
+      doc(db, "expoTokens", token),
+      {
+        userId,
+        createdAt: new Date(),
+      },
+      { merge: true }
+    );
 
-  return token;
+    console.log("✔ Token salvo automaticamente no Firestore");
+
+    return token;
+
+  } catch (err) {
+    console.error("❌ Erro ao registrar token Expo:", err);
+    return null;
+  }
 }

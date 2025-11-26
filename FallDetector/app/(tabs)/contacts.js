@@ -5,7 +5,12 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { userAPI, utils } from '../../services/api';
-import { findPessoaByEmail } from '../../services/firestorePessoas'; // IMPORTANTE
+import { findPessoaByEmail } from '../../services/firestorePessoas';
+import { auth } from '../../services/firebase';
+import {
+  getCuidadorByEmail,
+  vincularCuidadorAUsuario
+} from '../../services/firestoreVinculos';
 
 export default function ContactsScreen() {
   const [contacts, setContacts] = useState([]);
@@ -132,37 +137,105 @@ export default function ContactsScreen() {
   };
 
   // ==========================================
-  //  🔍 VALIDAÇÃO DE EMAIL — COLEÇÃO PESSOAS
+  //  🔗 VINCULAR CUIDADOR (FUNÇÃO SEPARADA)
   // ==========================================
+  const handleVincularCuidador = async () => {
+    if (!formData.email?.trim()) {
+      Alert.alert('Atenção', 'Por favor, preencha o e-mail do cuidador');
+      return;
+    }
 
+    try {
+      console.log("🔗 Tentando vincular cuidador com email:", formData.email.trim());
+
+      // 1. Verificar se o email é de um cuidador
+      const result = await getCuidadorByEmail(formData.email.trim());
+
+      if (!result.success) {
+        Alert.alert('Erro', result.message || 'Este email não pertence a um cuidador cadastrado.');
+        return;
+      }
+
+      console.log("✅ Cuidador encontrado:", result.cuidador);
+
+      // 2. Vincular o cuidador ao usuário atual
+      const usuarioAtual = auth.currentUser;
+      if (!usuarioAtual) {
+        Alert.alert('Erro', 'Você precisa estar logado.');
+        return;
+      }
+
+      console.log("🔗 Vinculando cuidador", result.cuidador.uid, "ao paciente", usuarioAtual.uid);
+
+      const vinculoResult = await vincularCuidadorAUsuario(
+        usuarioAtual.uid,
+        result.cuidador.uid
+      );
+
+      if (vinculoResult.success) {
+        Alert.alert(
+          'Sucesso! 🎉',
+          `O cuidador ${result.cuidador.nome} foi vinculado à sua conta!\n\nEle agora poderá visualizar suas quedas e localização.`
+        );
+
+        // Preencher nome automaticamente se estava vazio
+        if (!formData.nome?.trim()) {
+          setFormData(prev => ({
+            ...prev,
+            nome: result.cuidador.nome
+          }));
+        }
+      } else {
+        Alert.alert('Erro', vinculoResult.error || 'Não foi possível vincular o cuidador.');
+      }
+
+    } catch (error) {
+      console.error('❌ Erro ao vincular cuidador:', error);
+      Alert.alert('Erro', 'Falha ao vincular cuidador: ' + (error.message || 'Erro desconhecido'));
+    }
+  };
+
+  // ==========================================
+  //  🔍 VALIDAÇÃO DE EMAIL
+  // ==========================================
   const validateEmailInFirestore = async () => {
     if (!formData.email?.trim()) return true;
 
     const email = formData.email.trim();
-    const result = await findPessoaByEmail(email);
+    
+    try {
+      const result = await findPessoaByEmail(email);
 
-    if (!result.ok) {
-      if (result.reason === "not_found") {
-        Alert.alert("E-mail não encontrado", "Nenhum usuário registrado com este e-mail.");
-      } else if (result.reason === "inactive") {
-        Alert.alert("Usuário inativo", "Este usuário existe, mas não está ativo.");
-      } else {
-        Alert.alert("Erro", "Falha ao validar o e-mail.");
+      if (!result.ok) {
+        if (result.reason === "not_found") {
+          Alert.alert("E-mail não encontrado", "Nenhum usuário registrado com este e-mail.");
+        } else if (result.reason === "inactive") {
+          Alert.alert("Usuário inativo", "Este usuário existe, mas não está ativo.");
+        } else {
+          Alert.alert("Erro", "Falha ao validar o e-mail.");
+        }
+        return false;
       }
-      return false;
-    }
 
-    // Se usuário existe, usa nome real caso campo nome esteja vazio
-    if (!formData.nome?.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        nome: result.user.nome
-      }));
-    }
+      // Se usuário existe, usa nome real caso campo nome esteja vazio
+      if (!formData.nome?.trim() && result.user?.nome) {
+        setFormData(prev => ({
+          ...prev,
+          nome: result.user.nome
+        }));
+      }
 
-    return true;
+      return true;
+    } catch (error) {
+      console.error("Erro ao validar email:", error);
+      // Se der erro na validação, não bloqueia o salvamento
+      return true;
+    }
   };
 
+  // ==========================================
+  //  💾 SALVAR CONTATO
+  // ==========================================
   const handleSaveContact = async () => {
     if (!formData.nome?.trim()) {
       Alert.alert('Atenção', 'Por favor, preencha o nome');
@@ -173,9 +246,11 @@ export default function ContactsScreen() {
       return;
     }
 
-    // 🔍 Valida email no Firestore
-    const emailIsValid = await validateEmailInFirestore();
-    if (!emailIsValid) return;
+    // 🔍 Valida email no Firestore (se a função existir)
+    if (typeof findPessoaByEmail === 'function') {
+      const emailIsValid = await validateEmailInFirestore();
+      if (!emailIsValid) return;
+    }
 
     const tipoSelecionado = tiposCuidador.find(
       tipo => tipo.id_tipocuidador === formData.id_tipocuidador
@@ -184,7 +259,7 @@ export default function ContactsScreen() {
     const dataToSend = {
       nome: formData.nome.trim(),
       telefone: formData.telefone.trim(),
-      parentesco: tipoSelecionado?.descricao,
+      parentesco: tipoSelecionado?.descricao || formData.parentesco,
       id_tipocuidador: formData.id_tipocuidador,
       email: formData.email?.trim() || null,
     };
@@ -205,6 +280,7 @@ export default function ContactsScreen() {
         Alert.alert('Erro', response.message || 'Erro ao salvar contato');
       }
     } catch (error) {
+      console.error("Erro ao salvar contato:", error);
       Alert.alert('Erro', utils.formatError(error));
     }
   };
@@ -327,7 +403,24 @@ export default function ContactsScreen() {
               placeholder="E-mail (opcional)"
               value={formData.email}
               onChangeText={v => setFormData({ ...formData, email: v })}
+              keyboardType="email-address"
+              autoCapitalize="none"
             />
+
+            {/* BOTÃO DE VINCULAR CUIDADOR */}
+            <TouchableOpacity
+              style={styles.vinculateButton}
+              onPress={handleVincularCuidador}
+            >
+              <Text style={styles.vinculateButtonText}>
+                🔗 Vincular como Cuidador
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.vinculateHint}>
+              💡 Se este email for de um cuidador cadastrado, clique acima para vinculá-lo.
+              Assim ele poderá acompanhar suas quedas e localização.
+            </Text>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -379,13 +472,34 @@ export default function ContactsScreen() {
   );
 }
 
-const getStyles = () =>
+const getStyles = (nightMode) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#f5f5f5" },
-    centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: { padding: 20, backgroundColor: "#fff" },
-    title: { fontSize: 22, fontWeight: "bold" },
-    subtitle: { color: "#555", marginTop: 5 },
+    container: { flex: 1, backgroundColor: nightMode ? "#1a1a1a" : "#f5f5f5" },
+    centerContainer: { 
+      flex: 1, 
+      justifyContent: "center", 
+      alignItems: "center",
+      backgroundColor: nightMode ? "#1a1a1a" : "#f5f5f5"
+    },
+    loadingText: {
+      marginTop: 10,
+      color: nightMode ? "#fff" : "#666",
+    },
+    header: { 
+      padding: 20, 
+      backgroundColor: nightMode ? "#2a2a2a" : "#fff",
+      borderBottomWidth: 1,
+      borderBottomColor: nightMode ? "#444" : "#e0e0e0"
+    },
+    title: { 
+      fontSize: 22, 
+      fontWeight: "bold",
+      color: nightMode ? "#fff" : "#333"
+    },
+    subtitle: { 
+      color: nightMode ? "#aaa" : "#555", 
+      marginTop: 5 
+    },
     addButton: {
       backgroundColor: "#007AFF",
       margin: 20,
@@ -397,87 +511,162 @@ const getStyles = () =>
     contactItem: {
       flexDirection: "row",
       justifyContent: "space-between",
-      backgroundColor: "#fff",
+      backgroundColor: nightMode ? "#2a2a2a" : "#fff",
       padding: 15,
       margin: 10,
+      marginHorizontal: 20,
       borderRadius: 10,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
     },
     contactInfo: { flex: 1 },
-    contactName: { fontSize: 16, fontWeight: "bold" },
-    contactPhone: { color: "#555" },
-    contactRelationship: { fontStyle: "italic", color: "#777" },
-    contactEmail: { marginTop: 4, color: "#333" },
-    actionButtons: { justifyContent: "center" },
-    editButtonText: { fontSize: 20, marginBottom: 10 },
-    removeButtonText: { fontSize: 20 },
+    contactName: { 
+      fontSize: 16, 
+      fontWeight: "bold",
+      color: nightMode ? "#fff" : "#333"
+    },
+    contactPhone: { 
+      color: nightMode ? "#bbb" : "#555",
+      marginTop: 4
+    },
+    contactRelationship: { 
+      fontStyle: "italic", 
+      color: nightMode ? "#999" : "#777",
+      marginTop: 4
+    },
+    contactEmail: { 
+      marginTop: 6, 
+      color: nightMode ? "#aaa" : "#333",
+      fontSize: 13
+    },
+    actionButtons: { 
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 15
+    },
+    editButtonText: { fontSize: 22 },
+    removeButtonText: { fontSize: 22 },
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
+      backgroundColor: "rgba(0,0,0,0.6)",
       justifyContent: "center",
       alignItems: "center",
     },
     modalContent: {
-      backgroundColor: "#fff",
+      backgroundColor: nightMode ? "#2a2a2a" : "#fff",
       padding: 20,
       borderRadius: 16,
       width: "90%",
+      maxHeight: "80%",
     },
-    modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 15 },
+    modalTitle: { 
+      fontSize: 20, 
+      fontWeight: "bold", 
+      marginBottom: 15,
+      color: nightMode ? "#fff" : "#333"
+    },
     input: {
-      backgroundColor: "#f1f1f1",
+      backgroundColor: nightMode ? "#1a1a1a" : "#f1f1f1",
+      color: nightMode ? "#fff" : "#333",
       padding: 12,
       borderRadius: 8,
-      marginVertical: 10,
+      marginVertical: 8,
+      fontSize: 16,
     },
     customPicker: {
-      backgroundColor: "#f1f1f1",
+      backgroundColor: nightMode ? "#1a1a1a" : "#f1f1f1",
       padding: 12,
       borderRadius: 8,
-      marginVertical: 10,
+      marginVertical: 8,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
     },
-    modalButtons: { flexDirection: "row", justifyContent: "space-between" },
+    vinculateButton: {
+      backgroundColor: "#28a745",
+      padding: 14,
+      borderRadius: 8,
+      marginVertical: 10,
+      alignItems: "center",
+    },
+    vinculateButtonText: {
+      color: "#fff",
+      fontWeight: "bold",
+      fontSize: 15,
+    },
+    vinculateHint: {
+      fontSize: 12,
+      color: nightMode ? "#999" : "#666",
+      fontStyle: "italic",
+      marginBottom: 15,
+      lineHeight: 18,
+      textAlign: "center",
+    },
+    modalButtons: { 
+      flexDirection: "row", 
+      justifyContent: "space-between",
+      marginTop: 10
+    },
     cancelButton: {
-      backgroundColor: "#ccc",
-      padding: 12,
+      backgroundColor: nightMode ? "#444" : "#ccc",
+      padding: 14,
       borderRadius: 8,
       flex: 1,
-      marginRight: 5,
+      marginRight: 8,
+      alignItems: "center",
     },
-    cancelButtonText: { fontWeight: "bold" },
+    cancelButtonText: { 
+      fontWeight: "bold",
+      color: nightMode ? "#fff" : "#333"
+    },
     saveButton: {
       backgroundColor: "#007AFF",
-      padding: 12,
+      padding: 14,
       borderRadius: 8,
       flex: 1,
-      marginLeft: 5,
+      marginLeft: 8,
+      alignItems: "center",
     },
     saveButtonText: { color: "#fff", fontWeight: "bold" },
     pickerModalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
+      backgroundColor: "rgba(0,0,0,0.6)",
       justifyContent: "center",
       alignItems: "center",
     },
     pickerModalContent: {
-      backgroundColor: "#fff",
+      backgroundColor: nightMode ? "#2a2a2a" : "#fff",
       padding: 20,
       borderRadius: 16,
       width: "80%",
+      maxHeight: "70%",
     },
-    pickerModalTitle: { fontSize: 18, textAlign: "center", marginBottom: 10 },
+    pickerModalTitle: { 
+      fontSize: 18, 
+      textAlign: "center", 
+      marginBottom: 15,
+      fontWeight: "600",
+      color: nightMode ? "#fff" : "#333"
+    },
     pickerItem: {
       flexDirection: "row",
       justifyContent: "space-between",
       padding: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: nightMode ? "#444" : "#f0f0f0",
     },
     pickerCloseButton: {
       backgroundColor: "#007AFF",
-      padding: 10,
+      padding: 12,
       borderRadius: 8,
       marginTop: 15,
     },
-    pickerCloseButtonText: { color: "#fff", textAlign: "center" },
+    pickerCloseButtonText: { 
+      color: "#fff", 
+      textAlign: "center",
+      fontWeight: "600"
+    },
   });

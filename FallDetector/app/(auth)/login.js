@@ -36,7 +36,7 @@ export default function Login() {
       await AsyncStorage.setItem("authToken", token);
       await AsyncStorage.setItem("uid", uid);
 
-      // 📱 REGISTRA TOKEN EXPO
+      // 📱 REGISTRA TOKEN EXPO NO FIRESTORE
       await registerExpoToken(uid);
 
       console.log("📲 Token Expo registrado!");
@@ -46,12 +46,12 @@ export default function Login() {
 
     } catch (error) {
       console.error("❌ ERRO DE LOGIN REAL:", error);
-      
-      // 🔥 MOSTRA O ERRO REAL DO FIREBASE
+
       Alert.alert(
         "Erro ao entrar",
         `Código: ${error.code}\n\nMensagem: ${error.message}`
       );
+
     } finally {
       setLoading(false);
     }
@@ -79,7 +79,9 @@ export default function Login() {
       />
 
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "Carregando..." : "Entrar"}</Text>
+        <Text style={styles.buttonText}>
+          {loading ? "Carregando..." : "Entrar"}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/cadastro")}>
@@ -94,36 +96,36 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: "center",
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
   },
 
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#007AFF',
+    fontWeight: "bold",
+    color: "#007AFF",
     textAlign: "center",
-    marginBottom: 32
+    marginBottom: 32,
   },
 
   input: {
     borderWidth: 1,
-    borderColor: '#ced4da',
+    borderColor: "#ced4da",
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     fontSize: 16,
-    backgroundColor: '#f8f9fa',
-    color: '#495057',
+    backgroundColor: "#f8f9fa",
+    color: "#495057",
   },
 
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 20,
-    shadowColor: '#007AFF',
+    shadowColor: "#007AFF",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -131,15 +133,15 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 
   link: {
     marginTop: 18,
     color: "#007AFF",
     textAlign: "center",
-    fontSize: 15
-  }
+    fontSize: 15,
+  },
 });

@@ -1,6 +1,4 @@
 // services/api.js (Firebase puro)
-// Camada de serviços usando apenas Firebase (Auth + Firestore),
-// sem qualquer backend próprio (Express / API local).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from './firebase';
@@ -27,30 +25,24 @@ import {
 // ==================== HELPERS ====================
 
 async function getCurrentUid() {
-  // Tenta pegar do Firebase Auth primeiro
   const user = auth.currentUser;
   if (user?.uid) return user.uid;
 
-  // Fallback para AsyncStorage (caso tenha sido salvo manualmente)
   const storedUid = await AsyncStorage.getItem('uid');
   return storedUid;
 }
 
 // ==================== AUTENTICAÇÃO ====================
-// No app você já faz login com Firebase direto em app/(auth)/login.js.
-// Aqui mantemos apenas o logout para ser usado na Home.
 
 export const authAPI = {
   logout: async () => {
     try {
-      // Deslogar do Firebase Auth
       await signOut(auth);
     } catch (e) {
       console.error('❌ Erro ao sair do Firebase:', e);
     }
 
     try {
-      // Limpar dados locais
       await AsyncStorage.multiRemove([
         'userToken',
         'userData',
@@ -68,7 +60,8 @@ export const authAPI = {
 // ==================== USUÁRIO (PERFIL + CUIDADORES) ====================
 
 export const userAPI = {
-  // Buscar perfil do usuário logado na coleção "usuarios/{uid}"
+
+  // Buscar perfil do usuário logado
   getProfile: async () => {
     try {
       const uid = await getCurrentUid();
@@ -80,8 +73,8 @@ export const userAPI = {
       const snap = await getDoc(ref);
 
       if (!snap.exists()) {
-        // Se não existir, monta um perfil básico a partir do Firebase Auth
         const user = auth.currentUser;
+
         const basicUser = user
           ? {
               id: uid,
@@ -117,7 +110,7 @@ export const userAPI = {
     }
   },
 
-  // Atualizar dados de perfil em "usuarios/{uid}"
+  // Atualizar dados do perfil
   updateProfile: async (userData) => {
     try {
       const uid = await getCurrentUid();
@@ -127,10 +120,9 @@ export const userAPI = {
 
       const ref = doc(db, 'usuarios', uid);
 
-      // Faz merge dos dados
       await setDoc(ref, userData, { merge: true });
 
-      // Se o e-mail mudou, tentar atualizar também no Firebase Auth
+      // Atualizar email no Firebase Auth também
       if (userData.email && auth.currentUser) {
         try {
           if (auth.currentUser.email !== userData.email) {
@@ -155,15 +147,14 @@ export const userAPI = {
     }
   },
 
-  // Trocar senha do usuário logado
+  // Trocar senha
   changePassword: async (senhaAtual, novaSenha) => {
     try {
       const user = auth.currentUser;
-      if (!user || !user.email) {
+      if (!user?.email) {
         return { success: false, message: 'Usuário não autenticado.' };
       }
 
-      // Reautenticar se senhaAtual foi informada
       if (senhaAtual) {
         const credential = EmailAuthProvider.credential(user.email, senhaAtual);
         await reauthenticateWithCredential(user, credential);
@@ -181,9 +172,7 @@ export const userAPI = {
     }
   },
 
-  // "Upload" de foto de perfil
-  // Aqui estamos apenas salvando a URI da imagem no Firestore + AsyncStorage.
-  // Em produção, o ideal seria usar Firebase Storage.
+  // Upload foto perfil
   uploadPhoto: async (imageUri) => {
     try {
       const uid = await getCurrentUid();
@@ -195,21 +184,15 @@ export const userAPI = {
 
       await setDoc(
         ref,
-        {
-          foto_perfil: imageUri,
-        },
+        { foto_perfil: imageUri },
         { merge: true }
       );
 
-      // Também guarda localmente
       await AsyncStorage.setItem('profileImage', imageUri);
 
-      // Mantém formato esperado pela tela (response.data.url)
       return {
         success: true,
-        data: {
-          url: imageUri,
-        },
+        data: { url: imageUri },
       };
     } catch (error) {
       console.error('❌ Erro em userAPI.uploadPhoto:', error);
@@ -222,7 +205,6 @@ export const userAPI = {
 
   // ==================== CUIDADORES ====================
 
-  // Lista cuidadores na subcoleção "usuarios/{uid}/cuidadores"
   getCuidadores: async () => {
     try {
       const uid = await getCurrentUid();
@@ -249,7 +231,6 @@ export const userAPI = {
     }
   },
 
-  // Adiciona um cuidador
   addCuidador: async (cuidadorData) => {
     try {
       const uid = await getCurrentUid();
@@ -263,10 +244,7 @@ export const userAPI = {
         createdAt: new Date().toISOString(),
       });
 
-      return {
-        success: true,
-        id: docRef.id,
-      };
+      return { success: true, id: docRef.id };
     } catch (error) {
       console.error('❌ Erro em userAPI.addCuidador:', error);
       return {
@@ -276,7 +254,6 @@ export const userAPI = {
     }
   },
 
-  // Lista tipos de cuidador a partir da coleção "tiposCuidador"
   getTiposCuidador: async () => {
     try {
       const tiposRef = collection(db, 'tiposCuidador');
@@ -301,7 +278,6 @@ export const userAPI = {
     }
   },
 
-  // Atualiza um cuidador
   updateCuidador: async (cuidadorId, cuidadorData) => {
     try {
       const uid = await getCurrentUid();
@@ -325,7 +301,6 @@ export const userAPI = {
     }
   },
 
-  // Remove um cuidador
   removeCuidador: async (cuidadorId) => {
     try {
       const uid = await getCurrentUid();
@@ -364,13 +339,9 @@ export const utils = {
 
   getUserData: async () => {
     try {
-      // Primeiro tenta usar cache local
       const cached = await AsyncStorage.getItem('userData');
-      if (cached) {
-        return JSON.parse(cached);
-      }
+      if (cached) return JSON.parse(cached);
 
-      // Se não tem cache, buscar no Firestore
       const profile = await userAPI.getProfile();
       if (profile.success && profile.user) {
         await AsyncStorage.setItem('userData', JSON.stringify(profile.user));
@@ -387,7 +358,6 @@ export const utils = {
   formatError: (error) => {
     if (!error) return 'Erro desconhecido';
 
-    // Caso ainda exista algum erro vindo de Axios em outro ponto
     if (error.response) {
       return (
         error.response.data?.message ||
@@ -401,4 +371,3 @@ export const utils = {
     return 'Erro de conexão ou desconhecido.';
   },
 };
-
