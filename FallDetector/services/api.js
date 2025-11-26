@@ -1,411 +1,362 @@
-// services/api.js
-import axios from 'axios';
+// services/api.js (Firebase puro)
+// Camada de serviços usando apenas Firebase (Auth + Firestore),
+// sem qualquer backend próprio (Express / API local).
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { auth, db } from './firebase';
+import {
+  signOut,
+  updatePassword,
+  updateEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+} from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  deleteDoc,
+} from 'firebase/firestore';
 
-// ==================== CONFIGURAÇÃO AUTOMÁTICA DO ENDPOINT ====================
-const getBaseUrl = () => {
-  if (Platform.OS === 'android') {
-    return 'http://192.168.12.4:3000/api';
-  }
-  if (Platform.OS === 'ios') {
-    return 'http://localhost:3000/api';
-  }
-  if (Platform.OS === 'web') {
-    return 'http://localhost:3000/api';
-  }
-  // Para dispositivo físico, substitua pelo seu IP local
-  return 'http://192.168.12.4:3000/api';
-};
+// ==================== HELPERS ====================
 
-const API_URL = getBaseUrl();
+async function getCurrentUid() {
+  // Tenta pegar do Firebase Auth primeiro
+  const user = auth.currentUser;
+  if (user?.uid) return user.uid;
 
-// ==================== CONFIGURAÇÃO BASE DO AXIOS ====================
-const api = axios.create({
-  baseURL: API_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// ==================== INTERCEPTORES ====================
-api.interceptors.request.use(
-  async (config) => {
-    try {
-      const token = await AsyncStorage.getItem('userToken');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      console.log(`📡 ${config.method.toUpperCase()} ${config.url}`);
-    } catch (error) {
-      console.error('Erro ao buscar token:', error);
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => {
-    console.log(`✅ Resposta: ${response.config.url}`, response.status);
-    return response;
-  },
-  async (error) => {
-    console.error(`❌ Erro na requisição:`, error.response?.data || error.message);
-
-    if (error.response?.status === 401) {
-      await AsyncStorage.removeItem('userToken');
-      await AsyncStorage.removeItem('userData');
-    }
-    return Promise.reject(error);
-  }
-);
+  // Fallback para AsyncStorage (caso tenha sido salvo manualmente)
+  const storedUid = await AsyncStorage.getItem('uid');
+  return storedUid;
+}
 
 // ==================== AUTENTICAÇÃO ====================
+// No app você já faz login com Firebase direto em app/(auth)/login.js.
+// Aqui mantemos apenas o logout para ser usado na Home.
+
 export const authAPI = {
-  login: async (email, senha) => {
-    try {
-      console.log('🔐 Tentando login com:', email);
-      const response = await api.post('/auth/login', { email, senha });
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'Erro ao fazer login');
-      }
-
-      if (response.data.data && response.data.data.token) {
-        await AsyncStorage.setItem('userToken', response.data.data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
-        console.log('✅ Token e dados salvos no AsyncStorage');
-      }
-
-      return response.data.data;
-    } catch (error) {
-      console.error('❌ Erro no authAPI.login:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
-  register: async (userData) => {
-    try {
-      console.log('📝 Registrando usuário:', userData);
-      const response = await api.post('/auth/register', userData);
-
-      if (response.data.success && response.data.data?.token) {
-        await AsyncStorage.setItem('userToken', response.data.data.token);
-        await AsyncStorage.setItem('userData', JSON.stringify(response.data.data.user));
-        console.log('✅ Usuário registrado e autenticado');
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro no authAPI.register:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
-  verifyToken: async () => {
-    try {
-      const response = await api.get('/auth/verify');
-      console.log('✅ Token verificado:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao verificar token:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
   logout: async () => {
     try {
-      await AsyncStorage.removeItem('userToken');
-      await AsyncStorage.removeItem('userData');
-      console.log('👋 Logout realizado');
+      // Deslogar do Firebase Auth
+      await signOut(auth);
+    } catch (e) {
+      console.error('❌ Erro ao sair do Firebase:', e);
+    }
+
+    try {
+      // Limpar dados locais
+      await AsyncStorage.multiRemove([
+        'userToken',
+        'userData',
+        'authToken',
+        'uid',
+        'userEmail',
+      ]);
+      console.log('👋 Logout realizado (Firebase + AsyncStorage limpados)');
     } catch (error) {
-      console.error('❌ Erro no logout:', error);
+      console.error('❌ Erro ao limpar AsyncStorage no logout:', error);
     }
   },
 };
 
-// ==================== DISPOSITIVOS ====================
-export const deviceAPI = {
-  // Listar dispositivos configurados
-  getDevices: async () => {
-    try {
-      const response = await api.get('/devices');
-      console.log('📱 Dispositivos carregados:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao carregar dispositivos:', error);
-      throw error;
-    }
-  },
+// ==================== USUÁRIO (PERFIL + CUIDADORES) ====================
 
-  // Adicionar novo dispositivo
-  addDevice: async (deviceData) => {
+export const userAPI = {
+  // Buscar perfil do usuário logado na coleção "usuarios/{uid}"
+  getProfile: async () => {
     try {
-      console.log('➕ Adicionando dispositivo:', deviceData);
-      const response = await api.post('/devices', deviceData);
-      console.log('✅ Dispositivo adicionado:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao adicionar dispositivo:', error.response?.data || error);
-      throw error;
-    }
-  },
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.', user: null };
+      }
 
-  // Atualizar dispositivo
-  updateDevice: async (deviceId, deviceData) => {
-    try {
-      console.log(`✏️ Atualizando dispositivo ${deviceId}:`, deviceData);
-      const response = await api.put(`/devices/${deviceId}`, deviceData);
-      console.log('✅ Dispositivo atualizado:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao atualizar dispositivo:', error);
-      throw error;
-    }
-  },
+      const ref = doc(db, 'usuarios', uid);
+      const snap = await getDoc(ref);
 
-  // Remover dispositivo
-  removeDevice: async (deviceId) => {
-    try {
-      console.log(`🗑️ Removendo dispositivo ${deviceId}`);
-      const response = await api.delete(`/devices/${deviceId}`);
-      console.log('✅ Dispositivo removido:', response.data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao remover dispositivo:', error);
-      throw error;
-    }
-  },
+      if (!snap.exists()) {
+        // Se não existir, monta um perfil básico a partir do Firebase Auth
+        const user = auth.currentUser;
+        const basicUser = user
+          ? {
+              id: uid,
+              nome: user.displayName || '',
+              email: user.email || '',
+              telefone: '',
+            }
+          : null;
 
-  // Obter detalhes de um dispositivo
-  getDeviceDetails: async (deviceId) => {
-    try {
-      const response = await api.get(`/devices/${deviceId}`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao obter detalhes:', error);
-      throw error;
-    }
-  },
+        return {
+          success: !!basicUser,
+          user: basicUser,
+          message: basicUser
+            ? 'Perfil básico montado a partir do Firebase Auth.'
+            : 'Perfil não encontrado.',
+        };
+      }
 
-  // Buscar dispositivos disponíveis
-  scanDevices: async (tipo) => {
-    try {
-      console.log(`🔍 Buscando dispositivos ${tipo}...`);
-      const response = await api.get('/devices/scan', { params: { tipo } });
-      console.log('📡 Dispositivos encontrados:', response.data);
-      return response.data;
+      const data = snap.data() || {};
+      const user = {
+        id: uid,
+        ...data,
+      };
+
+      return { success: true, user };
     } catch (error) {
-      console.error('❌ Erro ao buscar dispositivos:', error);
-      // Fallback para mock local se API falhar
+      console.error('❌ Erro em userAPI.getProfile:', error);
       return {
-        dispositivos: tipo === 'wifi'
-          ? [
-            { nome: 'ESP32-WiFi-001', tipo: 'wifi', disponivel: true },
-            { nome: 'Monitor-WiFi-5G', tipo: 'wifi', disponivel: true }
-          ]
-          : [
-            { nome: 'ESP32-BT-001', tipo: 'bluetooth', macAddress: 'AA:BB:CC:DD:EE:01', disponivel: true },
-            { nome: 'Monitor-BT-002', tipo: 'bluetooth', macAddress: 'AA:BB:CC:DD:EE:02', disponivel: true }
-          ]
+        success: false,
+        user: null,
+        message: error.message || 'Erro ao carregar perfil.',
       };
     }
   },
 
-  // Obter código ESP32 configurado
-  getESP32Code: async (deviceId) => {
-    try {
-      const response = await api.get(`/devices/${deviceId}/code`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao obter código ESP32:', error);
-      throw error;
-    }
-  },
-
-  // Toggle status do dispositivo
-  toggleStatus: async (deviceId) => {
-    try {
-      const response = await api.put(`/devices/${deviceId}/toggle`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erro ao alternar status:', error);
-      throw error;
-    }
-  },
-};
-
-// ==================== QUEDAS ====================
-export const fallAPI = {
-  registerFall: async (fallData) => {
-    const response = await api.post('/falls', fallData);
-    return response.data;
-  },
-
-  getFallHistory: async () => {
-    const response = await api.get('/falls/history');
-    return response.data;
-  },
-
-  getStatistics: async () => {
-    const response = await api.get('/falls/statistics');
-    return response.data;
-  },
-};
-
-// ==================== NOTIFICAÇÕES ====================
-export const notificationAPI = {
-  getNotifications: async () => {
-    const response = await api.get('/notifications');
-    return response.data;
-  },
-
-  markAsRead: async (notificationId) => {
-    const response = await api.put(`/notifications/${notificationId}/read`);
-    return response.data;
-  },
-
-  markAllAsRead: async () => {
-    const response = await api.put('/notifications/read-all');
-    return response.data;
-  },
-
-  deleteNotification: async (notificationId) => {
-    const response = await api.delete(`/notifications/${notificationId}`);
-    return response.data;
-  },
-};
-
-// ==================== USUÁRIO ====================
-// Adicione estas funções ao objeto userAPI no arquivo services/api.js
-
-export const userAPI = {
-  getProfile: async () => {
-    const response = await api.get('/user/profile');
-    return response.data;
-  },
-
+  // Atualizar dados de perfil em "usuarios/{uid}"
   updateProfile: async (userData) => {
-    const response = await api.put('/user/profile', userData);
-    return response.data;
-  },
-
-  changePassword: async (senhaAtual, novaSenha) => {
-    const response = await api.put('/user/password', {
-      senhaAtual,
-      novaSenha,
-    });
-    return response.data;
-  },
-  uploadPhoto: async (imageUri) => {
     try {
-      console.log('📤 Iniciando upload da foto...');
-
-      // Criar FormData
-      const formData = new FormData();
-
-      // Verificar plataforma
-      if (Platform.OS === 'web') {
-        // Para Web: converter data URL para Blob
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-        formData.append('photo', blob, 'profile.jpg');
-      } else {
-        // Para Mobile: usar URI diretamente
-        const filename = imageUri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-        formData.append('photo', {
-          uri: imageUri,
-          name: filename,
-          type: type,
-        });
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
       }
 
-      // Fazer upload
-      const uploadResponse = await api.post('/user/upload-photo', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const ref = doc(db, 'usuarios', uid);
 
-      console.log('✅ Upload concluído:', uploadResponse.data);
-      return uploadResponse.data;
+      // Faz merge dos dados
+      await setDoc(ref, userData, { merge: true });
 
+      // Se o e-mail mudou, tentar atualizar também no Firebase Auth
+      if (userData.email && auth.currentUser) {
+        try {
+          if (auth.currentUser.email !== userData.email) {
+            await updateEmail(auth.currentUser, userData.email);
+          }
+        } catch (emailError) {
+          console.error('⚠ Erro ao atualizar e-mail no Firebase Auth:', emailError);
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Perfil atualizado com sucesso.',
+        user: { id: uid, ...userData },
+      };
     } catch (error) {
-      console.error('❌ Erro no upload:', error);
-      throw error;
+      console.error('❌ Erro em userAPI.updateProfile:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao atualizar perfil.',
+      };
     }
   },
 
+  // Trocar senha do usuário logado
+  changePassword: async (senhaAtual, novaSenha) => {
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      // Reautenticar se senhaAtual foi informada
+      if (senhaAtual) {
+        const credential = EmailAuthProvider.credential(user.email, senhaAtual);
+        await reauthenticateWithCredential(user, credential);
+      }
+
+      await updatePassword(user, novaSenha);
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erro em userAPI.changePassword:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao alterar senha.',
+      };
+    }
+  },
+
+  // "Upload" de foto de perfil
+  // Aqui estamos apenas salvando a URI da imagem no Firestore + AsyncStorage.
+  // Em produção, o ideal seria usar Firebase Storage.
+  uploadPhoto: async (imageUri) => {
+    try {
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      const ref = doc(db, 'usuarios', uid);
+
+      await setDoc(
+        ref,
+        {
+          foto_perfil: imageUri,
+        },
+        { merge: true }
+      );
+
+      // Também guarda localmente
+      await AsyncStorage.setItem('profileImage', imageUri);
+
+      // Mantém formato esperado pela tela (response.data.url)
+      return {
+        success: true,
+        data: {
+          url: imageUri,
+        },
+      };
+    } catch (error) {
+      console.error('❌ Erro em userAPI.uploadPhoto:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao enviar foto.',
+      };
+    }
+  },
+
+  // ==================== CUIDADORES ====================
+
+  // Lista cuidadores na subcoleção "usuarios/{uid}/cuidadores"
   getCuidadores: async () => {
     try {
-      const response = await api.get('/user/cuidadores');
-      console.log('✅ Cuidadores carregados:', response.data);
-      return response.data;
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      const cuidadoresRef = collection(db, 'usuarios', uid, 'cuidadores');
+      const snap = await getDocs(cuidadoresRef);
+
+      const cuidadores = snap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+
+      return { success: true, cuidadores };
     } catch (error) {
-      console.error('❌ Erro ao carregar cuidadores:', error);
-      throw error;
+      console.error('❌ Erro em userAPI.getCuidadores:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao carregar cuidadores.',
+        cuidadores: [],
+      };
     }
   },
 
+  // Adiciona um cuidador
   addCuidador: async (cuidadorData) => {
     try {
-      console.log('➕ Adicionando cuidador:', cuidadorData);
-      const response = await api.post('/user/cuidadores', cuidadorData);
-      console.log('✅ Cuidador adicionado:', response.data);
-      return response.data;
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      const cuidadoresRef = collection(db, 'usuarios', uid, 'cuidadores');
+      const docRef = await addDoc(cuidadoresRef, {
+        ...cuidadorData,
+        createdAt: new Date().toISOString(),
+      });
+
+      return {
+        success: true,
+        id: docRef.id,
+      };
     } catch (error) {
-      console.error('❌ Erro ao adicionar cuidador:', error);
-      throw error;
+      console.error('❌ Erro em userAPI.addCuidador:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao adicionar cuidador.',
+      };
     }
   },
 
+  // Lista tipos de cuidador a partir da coleção "tiposCuidador"
   getTiposCuidador: async () => {
     try {
-      console.log('📋 Buscando tipos de cuidador...');
-      const response = await api.get('/user/tipos-cuidador');
-      console.log('✅ Tipos de cuidador carregados:', response.data);
-      return response.data;
+      const tiposRef = collection(db, 'tiposCuidador');
+      const snap = await getDocs(tiposRef);
+
+      const tipos = snap.docs.map((docSnap) => {
+        const data = docSnap.data() || {};
+        return {
+          id_tipocuidador: data.id_tipocuidador ?? docSnap.id,
+          descricao: data.descricao || 'Sem descrição',
+        };
+      });
+
+      return { success: true, tipos };
     } catch (error) {
-      console.error('❌ Erro ao buscar tipos de cuidador:', error);
-      throw error;
+      console.error('❌ Erro em userAPI.getTiposCuidador:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao buscar tipos de cuidador.',
+        tipos: [],
+      };
     }
   },
 
+  // Atualiza um cuidador
   updateCuidador: async (cuidadorId, cuidadorData) => {
     try {
-      console.log('✏️ Atualizando cuidador ID:', cuidadorId, 'com dados:', cuidadorData);
-      const response = await api.put(`/user/cuidadores/${cuidadorId}`, cuidadorData);
-      console.log('✅ Cuidador atualizado:', response.data);
-      return response.data;
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      const ref = doc(db, 'usuarios', uid, 'cuidadores', cuidadorId);
+      await updateDoc(ref, {
+        ...cuidadorData,
+        updatedAt: new Date().toISOString(),
+      });
+
+      return { success: true };
     } catch (error) {
-      console.error('❌ Erro ao atualizar cuidador:', error);
-      throw error;
+      console.error('❌ Erro em userAPI.updateCuidador:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao atualizar cuidador.',
+      };
     }
   },
+
+  // Remove um cuidador
   removeCuidador: async (cuidadorId) => {
     try {
-      console.log('🗑️ Removendo cuidador ID:', cuidadorId);
-      const response = await api.delete(`/user/cuidadores/${cuidadorId}`);
-      console.log('✅ Cuidador removido:', response.data);
-      return response.data;
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      const ref = doc(db, 'usuarios', uid, 'cuidadores', cuidadorId);
+      await deleteDoc(ref);
+
+      return { success: true };
     } catch (error) {
-      console.error('❌ Erro ao remover cuidador:', error);
-      throw error;
+      console.error('❌ Erro em userAPI.removeCuidador:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao remover cuidador.',
+      };
     }
   },
 };
 
 // ==================== UTILITÁRIOS ====================
+
 export const utils = {
   isAuthenticated: async () => {
     try {
-      const token = await AsyncStorage.getItem('userToken');
-      return !!token;
+      const user = auth.currentUser;
+      if (user?.uid) return true;
+
+      const uid = await AsyncStorage.getItem('uid');
+      return !!uid;
     } catch {
       return false;
     }
@@ -413,135 +364,41 @@ export const utils = {
 
   getUserData: async () => {
     try {
-      const userData = await AsyncStorage.getItem('userData');
-      return userData ? JSON.parse(userData) : null;
-    } catch {
+      // Primeiro tenta usar cache local
+      const cached = await AsyncStorage.getItem('userData');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      // Se não tem cache, buscar no Firestore
+      const profile = await userAPI.getProfile();
+      if (profile.success && profile.user) {
+        await AsyncStorage.setItem('userData', JSON.stringify(profile.user));
+        return profile.user;
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Erro em utils.getUserData:', error);
       return null;
     }
   },
 
   formatError: (error) => {
+    if (!error) return 'Erro desconhecido';
+
+    // Caso ainda exista algum erro vindo de Axios em outro ponto
     if (error.response) {
-      return error.response.data?.message ||
+      return (
+        error.response.data?.message ||
         error.response.data?.error ||
-        'Erro no servidor';
-    } else if (error.request) {
-      return 'Erro de conexão. Verifique sua internet e se o servidor está rodando.';
-    } else {
-      return error.message || 'Erro desconhecido';
+        'Erro no servidor'
+      );
     }
+
+    if (error.message) return error.message;
+
+    return 'Erro de conexão ou desconhecido.';
   },
 };
-exports.getTiposCuidador = async (req, res) => {
-  try {
-    console.log('📋 Listando tipos de cuidador');
 
-    const [tipos] = await pool.query(
-      `SELECT id_tipocuidador, descricao 
-       FROM tipocuidador 
-       ORDER BY descricao ASC`
-    );
-
-    console.log(`✅ ${tipos.length} tipos encontrados`);
-
-    res.json({
-      success: true,
-      tipos: tipos
-    });
-
-  } catch (err) {
-    console.error('❌ Erro ao listar tipos de cuidador:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao listar tipos de cuidador.',
-      error: err.message
-    });
-  }
-};
-
-// ==================== ATUALIZAR CUIDADOR ====================
-exports.updateCuidador = async (req, res) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    const { cuidadorId } = req.params;
-    const { nome, telefone, parentesco, id_tipocuidador, email } = req.body;
-
-    // Validação básica
-    if (!nome || !telefone) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nome e telefone são obrigatórios.'
-      });
-    }
-
-    console.log('✏️ Atualizando cuidador ID:', cuidadorId, 'pelo usuário:', req.user.id);
-    console.log('📋 Novos dados:', { nome, telefone, parentesco, id_tipocuidador });
-
-    await connection.beginTransaction();
-
-    try {
-      // Verificar se o cuidador pertence ao usuário
-      const [vinculo] = await connection.query(
-        `SELECT uc.id_vinculo, c.id_pessoa, c.id_tipocuidador
-         FROM usuario_cuidador uc
-         INNER JOIN cuidador c ON uc.id_cuidador = c.id_cuidador
-         WHERE uc.id_usuario = ? AND uc.id_cuidador = ? AND uc.ativo = 1`,
-        [req.user.id, cuidadorId]
-      );
-
-      if (vinculo.length === 0) {
-        await connection.rollback();
-        return res.status(404).json({
-          success: false,
-          message: 'Cuidador não encontrado ou não pertence a este usuário.'
-        });
-      }
-
-      const idPessoa = vinculo[0].id_pessoa;
-
-      // Atualizar dados da pessoa
-      await connection.query(
-        `UPDATE pessoa
-         SET nome = ?, telefone = ?, email = ?
-         WHERE id_pessoa = ?`,
-        [nome.trim(), telefone.trim(), email?.trim() || null, idPessoa]
-      );
-
-      console.log('✅ Dados da pessoa atualizados');
-
-      // Atualizar tipo de cuidador
-      const tipoFinal = id_tipocuidador || vinculo[0].id_tipocuidador;
-
-      await connection.query(
-        'UPDATE cuidador SET id_tipocuidador = ? WHERE id_cuidador = ?',
-        [tipoFinal, cuidadorId]
-      );
-
-      console.log('✅ Tipo de cuidador atualizado para ID:', tipoFinal);
-
-      await connection.commit();
-      console.log('✅ Cuidador atualizado com sucesso');
-
-      res.json({
-        success: true,
-        message: 'Cuidador atualizado com sucesso.'
-      });
-
-    } catch (innerError) {
-      await connection.rollback();
-      throw innerError;
-    }
-
-  } catch (err) {
-    console.error('❌ Erro ao atualizar cuidador:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erro ao atualizar cuidador.',
-      error: err.message
-    });
-  } finally {
-    connection.release();
-  }
-};
-export default api;

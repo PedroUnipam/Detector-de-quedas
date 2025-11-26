@@ -1,11 +1,91 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /quedas/{docId} {
-      allow write: if request.auth != null;
+
+    // ============================================================
+    // USUÁRIOS (dados privados por UID)
+    // ============================================================
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Subcoleção de dispositivos
+      match /dispositivos/{deviceId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Subcoleção de endereços (caso exista)
+      match /enderecos/{endId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // ============================================================
+    // CUIDADORES (informações acessadas apenas após login)
+    // ============================================================
+    match /cuidadores/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================================
+    // PESSOAS (dados do paciente)
+    // ============================================================
+    match /pessoas/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================================
+    // TIPOS DE CUIDADOR (somente leitura)
+    // ============================================================
+    match /tiposCuidador/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ============================================================
+    // UF / ESTADOS (somente leitura)
+    // ============================================================
+    match /ufs/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ============================================================
+    // EVENTOS (log do sistema)
+    // ============================================================
+    match /eventos/{eventId} {
+      allow read: if request.auth != null;
+      allow write: if true;  // servidor, ESP ou app podem registrar eventos
+    }
+
+    // ============================================================
+    // NOTIFICAÇÕES
+    // ============================================================
+    match /notificacoes/{notifId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ============================================================
+    // expoTokens (armazenar push notification)
+    // ============================================================
+    match /expoTokens/{tokenId} {
+      allow read, write: if true; // livre porque o token é público
+    }
+
+    // ============================================================
+    // QUEDAS (ESP32 envia SEM autenticação)
+    // ============================================================
+    match /quedas/{quedaId} {
+      allow create: if true;  // ESP32 envia sem login
+      allow read: if request.auth != null; // app lê
+      allow update, delete: if false;
+    }
+
+    // ============================================================
+    // LOGS DE ACESSO
+    // ============================================================
+    match /logs_acesso/{logId} {
+      allow write: if true; // logs podem ser salvos sem restrição
       allow read: if request.auth != null;
     }
   }
 }
-

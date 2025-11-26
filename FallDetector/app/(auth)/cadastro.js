@@ -10,7 +10,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getTiposCuidador, registerUser } from "../../backend/controllers/authController.js";
+import { getTiposCuidador, registerUser } from "../../services/authController.js";
 
 // Máscaras
 const maskCPF = (v) => {

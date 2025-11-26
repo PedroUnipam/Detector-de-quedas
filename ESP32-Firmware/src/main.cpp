@@ -5,12 +5,7 @@
 #include "MPU6050_light.h"
 #include <Wire.h>
 #include <time.h>
-
-// ===========================
-// CONFIG WiFi - DESENVOLVIMENTO
-// ===========================
-const char* ssid     = "Loja Setta";      // <<< SUA REDE NORMAL
-const char* password = "seTs@2022";       // <<< SENHA DA REDE
+#include <Preferences.h>
 
 // ===========================
 // FIREBASE
@@ -40,9 +35,15 @@ unsigned long intervalo   = 3500;
 String deviceId = "esp32-1";
 
 // ===========================
-// HTTP SERVER
+// WIFI / CONFIG
 // ===========================
 WebServer server(80);
+Preferences prefs;
+
+const char* AP_SSID     = "FallDetector-Setup";
+const char* AP_PASSWORD = "12345678";
+
+bool modoConfig = false; // true = AP de configuração, false = STA normal
 
 // ===========================
 // LOGIN FIREBASE
@@ -107,14 +108,14 @@ void enviarQuedaFirestore(float ax, float ay, float az, float mag, int fallLevel
   StaticJsonDocument<512> doc;
   JsonObject fields = doc.createNestedObject("fields");
 
-  fields["deviceId"]["stringValue"] = deviceId;
-  fields["accX"]["doubleValue"] = ax;
-  fields["accY"]["doubleValue"] = ay;
-  fields["accZ"]["doubleValue"] = az;
-  fields["accMag"]["doubleValue"] = mag;
-  fields["wifiSignal"]["integerValue"] = WiFi.RSSI();
+  fields["deviceId"]["stringValue"]   = deviceId;
+  fields["accX"]["doubleValue"]       = ax;
+  fields["accY"]["doubleValue"]       = ay;
+  fields["accZ"]["doubleValue"]       = az;
+  fields["accMag"]["doubleValue"]     = mag;
+  fields["wifiSignal"]["integerValue"]= WiFi.RSSI();
   fields["fallLevel"]["integerValue"] = fallLevel;
-  fields["timestamp"]["stringValue"] = getTimestampBrazil();
+  fields["timestamp"]["stringValue"]  = getTimestampBrazil();
 
   String json;
   serializeJson(doc, json);
@@ -132,7 +133,13 @@ void enviarQuedaFirestore(float ax, float ay, float az, float mag, int fallLevel
 // HTTP HANDLERS
 // ===========================
 void handleRoot() {
-  server.send(200, "text/plain", "ESP32 Online - use /status ou /reset_wifi");
+  String msg;
+  if (modoConfig) {
+    msg = "ESP32 em modo CONFIG. Envie POST /config_wifi com {ssid,password}.";
+  } else {
+    msg = "ESP32 Online. Use /status ou /reset_wifi.";
+  }
+  server.send(200, "text/plain", msg);
 }
 
 void handleStatus() {
@@ -147,8 +154,101 @@ void handleStatus() {
 }
 
 void handleResetWifi() {
-  server.send(200, "text/plain", "Reset solicitado (placeholder)");
-  Serial.println("Reset WiFi chamado - aqui você poderia apagar prefs no futuro");
+  // Apaga dados salvos e reinicia em modo AP
+  prefs.begin("wifi", false);
+  prefs.clear();
+  prefs.end();
+
+  server.send(200, "text/plain", "WiFi resetado. Reiniciando em modo AP...");
+  delay(1000);
+  ESP.restart();
+}
+
+// RECEBE JSON { "ssid": "...", "password": "..." }
+void handleConfigWifi() {
+  if (!server.hasArg("plain")) {
+    server.send(400, "text/plain", "JSON obrigatório");
+    return;
+  }
+
+  String body = server.arg("plain");
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, body);
+
+  if (err) {
+    server.send(400, "text/plain", "JSON inválido");
+    return;
+  }
+
+  String newSsid = doc["ssid"].as<String>();
+  String newPass = doc["password"].as<String>();
+
+  Serial.println("📡 Recebido novo WiFi:");
+  Serial.println("SSID: " + newSsid);
+  Serial.println("PASS: " + newPass);
+
+  // Salva nas Preferences
+  prefs.begin("wifi", false);
+  prefs.putString("ssid", newSsid);
+  prefs.putString("password", newPass);
+  prefs.end();
+
+  server.send(200, "application/json", "{\"success\":true}");
+
+  Serial.println("Reiniciando para conectar na nova rede...");
+  delay(1000);
+  ESP.restart();
+}
+
+// ===========================
+// WIFI: CONECTAR OU MODO AP
+// ===========================
+void iniciarWifi() {
+  prefs.begin("wifi", false);
+  String savedSsid = prefs.getString("ssid", "");
+  String savedPass = prefs.getString("password", "");
+  prefs.end();
+
+  if (savedSsid.length() == 0) {
+    Serial.println("⚠ Nenhum WiFi salvo. Iniciando modo AP de configuração.");
+    modoConfig = true;
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(AP_SSID, AP_PASSWORD);
+    Serial.print("AP SSID: ");
+    Serial.println(AP_SSID);
+    Serial.print("IP AP: ");
+    Serial.println(WiFi.softAPIP());
+    return;
+  }
+
+  Serial.print("Conectando a WiFi salva: ");
+  Serial.println(savedSsid);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(savedSsid.c_str(), savedPass.c_str());
+
+  int tentativas = 0;
+  while (WiFi.status() != WL_CONNECTED && tentativas < 20) {
+    delay(500);
+    Serial.print(".");
+    tentativas++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    modoConfig = false;
+    Serial.println("\n✔ WiFi conectado!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n❌ Falha ao conectar. Entrando em modo AP de configuração.");
+    modoConfig = true;
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(AP_SSID, AP_PASSWORD);
+    Serial.print("AP SSID: ");
+    Serial.println(AP_SSID);
+    Serial.print("IP AP: ");
+    Serial.println(WiFi.softAPIP());
+  }
 }
 
 // ===========================
@@ -157,36 +257,27 @@ void handleResetWifi() {
 void setup() {
   Serial.begin(115200);
 
-  // WiFi STA na rede normal
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("Conectando ao WiFi ");
-  Serial.println(ssid);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\n✔ WiFi conectado!");
-  Serial.print("IP: ");
-  Serial.println(WiFi.localIP());
+  iniciarWifi();
 
   // NTP
   configTime(-3 * 3600, 0, "pool.ntp.org", "time.google.com");
 
-  // Firebase
-  loginFirebase();
+  if (!modoConfig) {
+    // Firebase só faz sentido se estiver conectado
+    loginFirebase();
 
-  // MPU
-  Wire.begin(SDA_PIN, SCL_PIN);
-  mpu.begin();
-  mpu.calcOffsets();
-  Serial.println("MPU calibrado.");
+    // MPU
+    Wire.begin(SDA_PIN, SCL_PIN);
+    mpu.begin();
+    mpu.calcOffsets();
+    Serial.println("MPU calibrado.");
+  }
 
   // HTTP
-  server.on("/", handleRoot);
+  server.on("/", HTTP_GET, handleRoot);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/reset_wifi", HTTP_POST, handleResetWifi);
+  server.on("/config_wifi", HTTP_POST, handleConfigWifi);
   server.begin();
   Serial.println("🌐 HTTP server iniciado");
 }
@@ -196,6 +287,12 @@ void setup() {
 // ===========================
 void loop() {
   server.handleClient();
+
+  if (modoConfig) {
+    // Só portal de configuração
+    delay(100);
+    return;
+  }
 
   mpu.update();
 

@@ -1,4 +1,5 @@
 // app/(auth)/login.js
+console.log("🔥 VERSÃO NOVA DO CÓDIGO CARREGOU 🔥");
 
 import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
@@ -6,6 +7,7 @@ import { useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { auth } from "../../services/firebase";
+import { registerExpoToken } from "../../services/notifications";
 
 export default function Login() {
   const router = useRouter();
@@ -23,21 +25,33 @@ export default function Login() {
     try {
       setLoading(true);
 
+      // 🔐 LOGIN NO FIREBASE
       const cred = await signInWithEmailAndPassword(auth, email, senha);
-
-      const token = await cred.user.getIdToken();
       const uid = cred.user.uid;
+      const token = await cred.user.getIdToken();
 
+      console.log("🔐 Login bem-sucedido!", uid);
+
+      // 💾 SALVA NO ASYNC STORAGE
       await AsyncStorage.setItem("authToken", token);
       await AsyncStorage.setItem("uid", uid);
 
-      console.log("🔐 Login bem-sucedido!");
+      // 📱 REGISTRA TOKEN EXPO
+      await registerExpoToken(uid);
 
+      console.log("📲 Token Expo registrado!");
+
+      // 🔀 NAVEGAÇÃO
       router.replace("/(tabs)");
 
     } catch (error) {
-      console.error("Erro login: ", error);
-      Alert.alert("Erro", "Email ou senha inválidos.");
+      console.error("❌ ERRO DE LOGIN REAL:", error);
+      
+      // 🔥 MOSTRA O ERRO REAL DO FIREBASE
+      Alert.alert(
+        "Erro ao entrar",
+        `Código: ${error.code}\n\nMensagem: ${error.message}`
+      );
     } finally {
       setLoading(false);
     }
@@ -45,7 +59,6 @@ export default function Login() {
 
   return (
     <View style={styles.container}>
-
       <Text style={styles.title}>Entrar</Text>
 
       <TextInput
@@ -72,7 +85,6 @@ export default function Login() {
       <TouchableOpacity onPress={() => router.push("/cadastro")}>
         <Text style={styles.link}>Não tem conta? Cadastre-se</Text>
       </TouchableOpacity>
-
     </View>
   );
 }
