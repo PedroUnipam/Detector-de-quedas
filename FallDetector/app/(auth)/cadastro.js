@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getTiposCuidador, registerUser } from "../../services/authController.js";
+import { registerUser } from "../../services/authController.js";
 
 // Máscaras
 const maskCPF = (v) => {
@@ -36,135 +36,89 @@ const maskData = (v) => {
     .replace(/(\d{2})(\d{4})$/, "$1/$2");
 };
 
+const maskCEP = (v) => {
+  return v
+    .replace(/\D/g, "")               
+    .replace(/(\d{5})(\d)/, "$1-$2");
+};
+
 export default function Cadastro() {
   const router = useRouter();
 
+  const [step, setStep] = useState(1);
+
+  // PASSO 1 – Informações pessoais
   const [nome, setNome] = useState("");
   const [cpf, setCPF] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
-
-  const [tipoPessoa, setTipoPessoa] = useState("usuario"); 
   const [dataNascimento, setDataNascimento] = useState("");
-  const [tipoCuidadorDescricao, setTipoCuidadorDescricao] = useState("");
+
+  // PASSO 2 – Endereço
+  const [rua, setRua] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [cep, setCEP] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleCadastro = async () => {
-    setError("");
-
-    if (!nome || !cpf || !telefone || !email || !senha) {
-      setError("Preencha todos os campos obrigatórios.");
-      return;
-    }
-
-    if (tipoPessoa === "usuario" && !dataNascimento) {
-      setError("Informe a data de nascimento.");
-      return;
-    }
-
-    if (tipoPessoa === "cuidador" && !tipoCuidadorDescricao.trim()) {
-      setError("Informe o tipo de cuidador (ex: Enfermeiro, Familiar, etc).");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      await registerUser({
-        nome,
-        cpf,
-        telefone,
-        email,
-        senha,
-        tipoPessoa,
-        dataNascimento,
-        tipoCuidadorDescricao: tipoCuidadorDescricao.trim(),
-      });
-
-      router.replace("/(auth)/login");
-    } catch (err) {
-      console.error("❌ Erro no cadastro:", err);
-      setError(err.message || "Erro ao cadastrar. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} style={styles.container}>
-      <Text style={styles.title}>Criar Conta</Text>
+      <Text style={styles.title}>
+        {step === 1 ? "Criar Conta" : "Endereço"}
+      </Text>
 
-      <Text style={styles.label}>Nome completo</Text>
-      <TextInput
-        style={styles.input}
-        value={nome}
-        onChangeText={setNome}
-        placeholder="Digite seu nome"
-      />
-
-      <Text style={styles.label}>CPF</Text>
-      <TextInput
-        style={styles.input}
-        value={cpf}
-        onChangeText={(t) => setCPF(maskCPF(t))}
-        keyboardType="numeric"
-        placeholder="000.000.000-00"
-      />
-
-      <Text style={styles.label}>Telefone</Text>
-      <TextInput
-        style={styles.input}
-        value={telefone}
-        onChangeText={(t) => setTelefone(maskTelefone(t))}
-        keyboardType="numeric"
-        placeholder="(00) 00000-0000"
-      />
-
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        style={styles.input}
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholder="seu@email.com"
-      />
-
-      <Text style={styles.label}>Senha</Text>
-      <TextInput
-        style={styles.input}
-        value={senha}
-        onChangeText={setSenha}
-        secureTextEntry
-        placeholder="Mínimo 6 caracteres"
-      />
-
-      <Text style={styles.label}>Tipo de conta</Text>
-      <View style={styles.tipoContainer}>
-        <TouchableOpacity
-          style={[styles.tipoBtn, tipoPessoa === "usuario" && styles.tipoBtnActive]}
-          onPress={() => setTipoPessoa("usuario")}
-        >
-          <Text style={[styles.tipoText, tipoPessoa === "usuario" && styles.tipoTextActive]}>
-            Usuário
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tipoBtn, tipoPessoa === "cuidador" && styles.tipoBtnActive]}
-          onPress={() => setTipoPessoa("cuidador")}
-        >
-          <Text style={[styles.tipoText, tipoPessoa === "cuidador" && styles.tipoTextActive]}>
-            Cuidador
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {tipoPessoa === "usuario" && (
+      {step === 1 && (
         <>
+          <Text style={styles.label}>Nome completo</Text>
+          <TextInput
+            style={styles.input}
+            value={nome}
+            onChangeText={setNome}
+            placeholder="Digite seu nome"
+          />
+
+          <Text style={styles.label}>CPF</Text>
+          <TextInput
+            style={styles.input}
+            value={cpf}
+            onChangeText={(t) => setCPF(maskCPF(t))}
+            maxLength={14}
+            keyboardType="numeric"
+            placeholder="000.000.000-00"
+          />
+
+          <Text style={styles.label}>Telefone</Text>
+          <TextInput
+            style={styles.input}
+            value={telefone}
+            maxLength={15}
+            onChangeText={(t) => setTelefone(maskTelefone(t))}
+            keyboardType="numeric"
+            placeholder="(00) 00000-0000"
+          />
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            placeholder="seu@email.com"
+          />
+
+          <Text style={styles.label}>Senha</Text>
+          <TextInput
+            style={styles.input}
+            value={senha}
+            onChangeText={setSenha}
+            secureTextEntry
+            placeholder="Mínimo 6 caracteres"
+          />
+
           <Text style={styles.label}>Data de nascimento</Text>
           <TextInput
             style={styles.input}
@@ -172,76 +126,94 @@ export default function Cadastro() {
             onChangeText={(t) => setDataNascimento(maskData(t))}
             keyboardType="numeric"
             placeholder="dd/mm/aaaa"
+            maxLength={10}
           />
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => {
+              if (!nome || !cpf || !telefone || !email || !senha || !dataNascimento) {
+                setError("Preencha todos os campos antes de continuar.");
+                return;
+              }
+              setError("");
+              setStep(2);
+            }}
+          >
+            <Text style={styles.buttonText}>Próximo</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
+            <Text style={styles.linkText}>Já tem conta? Fazer login</Text>
+          </TouchableOpacity>
         </>
       )}
 
-      {tipoPessoa === "cuidador" && (
+      {/* ================= PASSO 2 ================= */}
+      {step === 2 && (
         <>
-          <Text style={styles.label}>Tipo de cuidador</Text>
+          <Text style={styles.label}>Rua</Text>
           <TextInput
             style={styles.input}
-            value={tipoCuidadorDescricao}
-            onChangeText={setTipoCuidadorDescricao}
-            placeholder="Ex: Enfermeiro, Familiar, Médico..."
-            autoCapitalize="words"
+            value={rua}
+            onChangeText={setRua}
+            placeholder="Ex: Rua das Flores 123"
           />
 
-          <Text style={styles.hint}>
-            💡 Informe sua especialidade ou relação com o paciente
-          </Text>
+          <Text style={styles.label}>Bairro</Text>
+          <TextInput
+            style={styles.input}
+            value={bairro}
+            onChangeText={setBairro}
+            placeholder="Centro"
+          />
 
-          <View style={styles.suggestionsContainer}>
-            <Text style={styles.suggestionsTitle}>Sugestões:</Text>
+          <Text style={styles.label}>Cidade</Text>
+          <TextInput
+            style={styles.input}
+            value={cidade}
+            onChangeText={setCidade}
+            placeholder="São Paulo"
+          />
 
-            <View style={styles.suggestionsRow}>
-              {["Enfermeiro(a)", "Familiar", "Médico(a)", "Fisioterapeuta"].map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={styles.suggestionChip}
-                  onPress={() => setTipoCuidadorDescricao(s)}
-                >
-                  <Text style={styles.suggestionText}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <Text style={styles.label}>CEP</Text>
+          <TextInput
+            style={styles.input}
+            value={cep}
+            onChangeText={(t) => setCEP(maskCEP(t))}
+            placeholder="00000-000"
+            keyboardType="numeric"
+            maxLength={9}
+          />
 
-            <View style={styles.suggestionsRow}>
-              {["Cuidador Profissional", "Técnico Enfermagem"].map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={styles.suggestionChip}
-                  onPress={() => setTipoCuidadorDescricao(s)}
-                >
-                  <Text style={styles.suggestionText}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          {/* BOTÃO FINALIZAR */}
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => {
+              if (!rua || !bairro || !cidade || !cep) {
+                setError("Preencha todos os campos do endereço.");
+                return;
+              }
+              setError("");
+              alert("Cadastro concluído (somente front).");
+              router.replace("/(auth)/login");
+            }}
+          >
+            <Text style={styles.buttonText}>Cadastrar</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setStep(1)}>
+            <Text style={styles.linkText}>Voltar</Text>
+          </TouchableOpacity>
         </>
       )}
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <TouchableOpacity
-        style={[styles.button, loading && { opacity: 0.6 }]}
-        onPress={handleCadastro}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Criar conta</Text>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
-        <Text style={styles.linkText}>Já tem conta? Fazer login</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f8f9fa" },
   scrollContainer: { padding: 24, paddingTop: 60, paddingBottom: 40 },
