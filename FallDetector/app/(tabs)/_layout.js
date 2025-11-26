@@ -13,31 +13,14 @@ export default function TabLayout() {
   const [loading, setLoading] = useState(true);
   const [verificado, setVerificado] = useState(false);
 
+  const {currentUser: user} = auth
+
   useEffect(() => {
-    let isMounted = true;
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!isMounted) return;
-
-      if (!user) {
-        console.log('⚠️ Nenhum usuário autenticado');
-        setLoading(false);
-        setVerificado(true);
-        return;
-      }
-
-      // Só verifica se ainda não foi verificado
-      if (!verificado) {
-        await verificarTipoUsuario(user);
-      }
-    });
-
-    // Cleanup
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
-  }, [verificado]);
+    (async function() {
+      console.log({userInUseEffect: user});
+      await verificarTipoUsuario(user);
+    })()
+  }, []);
 
   const verificarTipoUsuario = async (user) => {
     try {
