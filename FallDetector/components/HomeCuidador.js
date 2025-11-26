@@ -412,7 +412,7 @@ export default function HomeCuidador({ userData }) {
             </View>
 
             {/* Debug Info */}
-            <View style={styles.debugInfo}>
+            {/* <View style={styles.debugInfo}>
                 <Text style={styles.debugTitle}>🐛 DEBUG - HomeCuidador</Text>
                 <Text style={styles.debugText}>Usuário: {userData?.nome}</Text>
                 <Text style={styles.debugText}>Email: {userData?.email}</Text>
@@ -423,7 +423,7 @@ export default function HomeCuidador({ userData }) {
                 <Text style={styles.debugText}>
                     - Via dispositivo: {pacientes.filter(p => p.vinculoDispositivo).length}
                 </Text>
-            </View>
+            </View> */}
         </ScrollView>
     );
 }
