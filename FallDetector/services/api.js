@@ -84,11 +84,11 @@ export const userAPI = {
         const user = auth.currentUser;
         const basicUser = user
           ? {
-              id: uid,
-              nome: user.displayName || '',
-              email: user.email || '',
-              telefone: '',
-            }
+            id: uid,
+            nome: user.displayName || '',
+            email: user.email || '',
+            telefone: '',
+          }
           : null;
 
         return {
@@ -277,26 +277,33 @@ export const userAPI = {
   },
 
   // Lista tipos de cuidador a partir da coleção "tiposCuidador"
-  getTiposCuidador: async () => {
+  addCuidador: async (cuidadorData) => {
     try {
-      const tiposRef = collection(db, 'tiposCuidador');
-      const snap = await getDocs(tiposRef);
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
 
-      const tipos = snap.docs.map((docSnap) => {
-        const data = docSnap.data() || {};
-        return {
-          id_tipocuidador: data.id_tipocuidador ?? docSnap.id,
-          descricao: data.descricao || 'Sem descrição',
-        };
+      const cuidadoresRef = collection(db, 'usuarios', uid, 'cuidadores');
+
+      // cuidadorData já vem com 'parentesco' como string livre
+      const docRef = await addDoc(cuidadoresRef, {
+        nome: cuidadorData.nome,
+        telefone: cuidadorData.telefone,
+        parentesco: cuidadorData.parentesco, // Texto livre
+        email: cuidadorData.email || null,
+        createdAt: new Date().toISOString(),
       });
 
-      return { success: true, tipos };
+      return {
+        success: true,
+        id: docRef.id,
+      };
     } catch (error) {
-      console.error('❌ Erro em userAPI.getTiposCuidador:', error);
+      console.error('❌ Erro em userAPI.addCuidador:', error);
       return {
         success: false,
-        message: error.message || 'Erro ao buscar tipos de cuidador.',
-        tipos: [],
+        message: error.message || 'Erro ao adicionar cuidador.',
       };
     }
   },
@@ -312,6 +319,31 @@ export const userAPI = {
       const ref = doc(db, 'usuarios', uid, 'cuidadores', cuidadorId);
       await updateDoc(ref, {
         ...cuidadorData,
+        updatedAt: new Date().toISOString(),
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erro em userAPI.updateCuidador:', error);
+      return {
+        success: false,
+        message: error.message || 'Erro ao atualizar cuidador.',
+      };
+    }
+  }, updateCuidador: async (cuidadorId, cuidadorData) => {
+    try {
+      const uid = await getCurrentUid();
+      if (!uid) {
+        return { success: false, message: 'Usuário não autenticado.' };
+      }
+
+      const ref = doc(db, 'usuarios', uid, 'cuidadores', cuidadorId);
+
+      await updateDoc(ref, {
+        nome: cuidadorData.nome,
+        telefone: cuidadorData.telefone,
+        parentesco: cuidadorData.parentesco, // Texto livre
+        email: cuidadorData.email || null,
         updatedAt: new Date().toISOString(),
       });
 

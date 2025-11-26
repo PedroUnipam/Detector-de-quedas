@@ -1,6 +1,6 @@
 // app/(auth)/cadastro.js
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,10 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { getTiposCuidador, registerUser } from "../../services/authController.js";
+import { registerUser } from "../../services/authController.js";
 
 // Máscaras
 const maskCPF = (v) => {
@@ -46,25 +47,10 @@ export default function Cadastro() {
 
   const [tipoPessoa, setTipoPessoa] = useState("usuario"); // "usuario" ou "cuidador"
   const [dataNascimento, setDataNascimento] = useState("");
-
-  const [tiposCuidador, setTiposCuidador] = useState([]);
-  const [tipoCuidadorId, setTipoCuidadorId] = useState("");
+  const [tipoCuidadorDescricao, setTipoCuidadorDescricao] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Carregar tipos de cuidador do Firestore
-  useEffect(() => {
-    (async () => {
-      try {
-        const lista = await getTiposCuidador();
-        setTiposCuidador(lista);
-      } catch (err) {
-        console.log(err);
-        setError("Erro ao carregar tipos de cuidador.");
-      }
-    })();
-  }, []);
 
   const handleCadastro = async () => {
     setError("");
@@ -79,8 +65,8 @@ export default function Cadastro() {
       return;
     }
 
-    if (tipoPessoa === "cuidador" && !tipoCuidadorId) {
-      setError("Selecione o tipo de cuidador.");
+    if (tipoPessoa === "cuidador" && !tipoCuidadorDescricao.trim()) {
+      setError("Informe o tipo de cuidador (ex: Enfermeiro, Familiar, etc).");
       return;
     }
 
@@ -95,13 +81,13 @@ export default function Cadastro() {
         senha,
         tipoPessoa,
         dataNascimento,
-        tipoCuidadorId,
+        tipoCuidadorDescricao: tipoCuidadorDescricao.trim(),
       });
 
-      // após cadastro, joga para tela de login ou tabs
+      // após cadastro, joga para tela de login
       router.replace("/(auth)/login");
     } catch (err) {
-      console.log(err);
+      console.error("❌ Erro no cadastro:", err);
       setError(err.message || "Erro ao cadastrar. Tente novamente.");
     } finally {
       setLoading(false);
@@ -144,6 +130,7 @@ export default function Cadastro() {
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
+        keyboardType="email-address"
         placeholder="seu@email.com"
       />
 
@@ -209,25 +196,42 @@ export default function Cadastro() {
       {tipoPessoa === "cuidador" && (
         <>
           <Text style={styles.label}>Tipo de cuidador</Text>
-          {tiposCuidador.map((t) => (
-            <TouchableOpacity
-              key={t.id}
-              style={[
-                styles.tipoOpcao,
-                tipoCuidadorId === t.id && styles.tipoOpcaoActive,
-              ]}
-              onPress={() => setTipoCuidadorId(t.id)}
-            >
-              <Text
-                style={[
-                  styles.tipoOpcaoText,
-                  tipoCuidadorId === t.id && styles.tipoOpcaoTextActive,
-                ]}
-              >
-                {t.descricao || "Sem descrição"}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          <TextInput
+            style={styles.input}
+            value={tipoCuidadorDescricao}
+            onChangeText={setTipoCuidadorDescricao}
+            placeholder="Ex: Enfermeiro, Familiar, Médico..."
+            autoCapitalize="words"
+          />
+          <Text style={styles.hint}>
+            💡 Informe sua especialidade ou relação com o paciente
+          </Text>
+          
+          <View style={styles.suggestionsContainer}>
+            <Text style={styles.suggestionsTitle}>Sugestões:</Text>
+            <View style={styles.suggestionsRow}>
+              {["Enfermeiro(a)", "Familiar", "Médico(a)", "Fisioterapeuta"].map((sugestao) => (
+                <TouchableOpacity
+                  key={sugestao}
+                  style={styles.suggestionChip}
+                  onPress={() => setTipoCuidadorDescricao(sugestao)}
+                >
+                  <Text style={styles.suggestionText}>{sugestao}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.suggestionsRow}>
+              {["Cuidador Profissional", "Técnico Enfermagem"].map((sugestao) => (
+                <TouchableOpacity
+                  key={sugestao}
+                  style={styles.suggestionChip}
+                  onPress={() => setTipoCuidadorDescricao(sugestao)}
+                >
+                  <Text style={styles.suggestionText}>{sugestao}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
         </>
       )}
 
@@ -238,9 +242,11 @@ export default function Cadastro() {
         onPress={handleCadastro}
         disabled={loading}
       >
-        <Text style={styles.buttonText}>
-          {loading ? "Criando conta..." : "Criar conta"}
-        </Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Criar conta</Text>
+        )}
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
@@ -281,6 +287,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: "#fff",
   },
+  hint: {
+    fontSize: 13,
+    color: "#6c757d",
+    marginTop: 6,
+    fontStyle: "italic",
+  },
   tipoContainer: {
     flexDirection: "row",
     gap: 8,
@@ -307,25 +319,42 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
   },
-  tipoOpcao: {
-    padding: 10,
+  
+  // Sugestões de tipos
+  suggestionsContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: "#f8f9fa",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#ced4da",
-    marginTop: 6,
-    backgroundColor: "#fff",
+    borderColor: "#e9ecef",
   },
-  tipoOpcaoActive: {
-    backgroundColor: "#007AFF",
+  suggestionsTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#495057",
+    marginBottom: 8,
+  },
+  suggestionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 6,
+  },
+  suggestionChip: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: "#007AFF",
   },
-  tipoOpcaoText: {
-    color: "#343a40",
+  suggestionText: {
+    fontSize: 12,
+    color: "#007AFF",
+    fontWeight: "500",
   },
-  tipoOpcaoTextActive: {
-    color: "#fff",
-    fontWeight: "600",
-  },
+  
   button: {
     marginTop: 24,
     backgroundColor: "#007AFF",
@@ -344,8 +373,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   error: {
-    color: "red",
+    color: "#dc3545",
     marginTop: 10,
+    fontSize: 14,
+    fontWeight: "500",
   },
   linkText: {
     marginTop: 16,

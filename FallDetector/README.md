@@ -33,3 +33,4 @@ npx expo install react-native-screens react-native-safe-area-context
 npx expo install @expo/vector-icons
 npx expo install @react-native-async-storage/async-storage
 npx expo install expo-image-picker
+npx expo install expo-location
