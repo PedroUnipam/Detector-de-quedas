@@ -299,9 +299,6 @@ export default function HomeScreen() {
             ? "Nenhuma queda registrada hoje."
             : `Foram registradas ${totalHoje} queda(s) hoje.`}
         </Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Sair 🚪</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Comandos Rápidos - APENAS PARA PACIENTES */}
@@ -410,7 +407,7 @@ export default function HomeScreen() {
       </View>
 
       {/* Info de Debug */}
-      <View style={styles.devInfo}>
+      {/* <View style={styles.devInfo}>
         <Text style={styles.devTitle}>🐛 DEBUG INFO</Text>
         <Text style={styles.devText}>ID: {userData?.id}</Text>
         <Text style={styles.devText}>UID: {userData?.uid}</Text>
@@ -419,7 +416,7 @@ export default function HomeScreen() {
         <Text style={[styles.devText, styles.devImportant]}>
           É CUIDADOR: {isCuidador ? "SIM ✅" : "NÃO ❌"}
         </Text>
-      </View>
+      </View> */}
     </ScrollView>
   );
 }

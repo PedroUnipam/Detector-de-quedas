@@ -206,9 +206,6 @@ export default function HomeCuidador({ userData }) {
                         ? "Nenhum paciente vinculado ainda."
                         : `Você está monitorando ${pacientes.length} paciente(s).`}
                 </Text>
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Text style={styles.logoutButtonText}>Sair 🚪</Text>
-                </TouchableOpacity>
             </View>
 
             {/* Resumo Geral */}
