@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged } from "@react-native-firebase/auth";
 import { auth } from "../services/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 /**
  * @typedef {Object} AuthContextValue
  * @property {import('@react-native-firebase/auth').FirebaseAuthTypes.User | null} user
+ * @property {string | null} token
  * @property {boolean} loading
  * @property {(email: string, password: string) => Promise<void>} login
  * @property {() => Promise<void>} logout
@@ -20,13 +21,25 @@ const AuthContext = createContext(undefined);
  */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Subscribe to auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+
+      try {
+        if (firebaseUser) {
+          const idToken = await firebaseUser.getIdToken();
+          setToken(idToken);
+        } else {
+          setToken(null);
+        }
+      } catch (err) {
+        console.error("Falha ao buscar idToken");
+      }
     });
 
     return unsubscribe;
@@ -37,15 +50,15 @@ export function AuthProvider({ children }) {
    * @param {string} password
    */
   const login = async (email, password) => {
-    await auth().signInWithEmailAndPassword(email, password);
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
-    await auth().signOut();
+    await auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, token }}>
       {children}
     </AuthContext.Provider>
   );

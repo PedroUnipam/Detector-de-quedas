@@ -11,13 +11,11 @@ import {
   StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { auth } from "../../services/firebase";
-import { registerExpoToken } from "../../services/notifications";
+import { useAuth } from "../../contexts/auth";
 
 export default function Login() {
   const router = useRouter();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -32,21 +30,7 @@ export default function Login() {
     try {
       setLoading(true);
 
-      // 🔐 LOGIN NO FIREBASE
-      const cred = await signInWithEmailAndPassword(auth, email, senha);
-      const uid = cred.user.uid;
-      const token = await cred.user.getIdToken();
-
-      console.log("🔐 Login bem-sucedido!", uid);
-
-      // 💾 SALVA NO ASYNC STORAGE
-      await AsyncStorage.setItem("authToken", token);
-      await AsyncStorage.setItem("uid", uid);
-
-      // 📱 REGISTRA TOKEN EXPO NO FIRESTORE
-      await registerExpoToken(uid);
-
-      console.log("📲 Token Expo registrado!");
+      await login(email, senha);
 
       // 🔀 NAVEGAÇÃO
       router.replace("/(tabs)");

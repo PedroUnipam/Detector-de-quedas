@@ -8,7 +8,7 @@ const firebaseConfig = {
   projectId: "falldetector-3efce",
   storageBucket: "falldetector-3efce.appspot.com",
   messagingSenderId: "131363729817",
-  appId: "1:131363729817:web:XXXXXXXXXXXX"
+  appId: "1:131363729817:web:XXXXXXXXXXXX",
 };
 
 const app = initializeApp(firebaseConfig);
