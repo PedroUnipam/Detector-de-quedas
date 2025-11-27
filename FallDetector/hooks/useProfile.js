@@ -27,6 +27,7 @@ import { useState, useEffect, useCallback } from "react";
  * @property {boolean} loading
  * @property {Error} error
  * @property {() => Promise<void>} refetchProfile
+ * @return {useProfileReturn}
  */
 export function useProfile() {
   const api = useApi();

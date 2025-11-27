@@ -1,35 +1,32 @@
 // app/(tabs)/index.js
 
-import React, { useState, useEffect } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import React, { useMemo } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { getQuedasFromFirestore } from "../../services/firestoreQuedas";
 import HomeCuidador from "../../components/HomeCuidador";
-import { auth, db } from "../../services/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { useProfile } from "../../hooks/useProfile";
 import { useCreateEvent } from "../../hooks/useCreateEvent";
+import { useEvents } from "../../hooks/useEvents";
+import { useProfile } from "../../hooks/useProfile";
 
 // ==========================
 // Ajuda visual para intensidade
 // ==========================
-const classifyFallEmoji = (level) => {
+const classifyFallEmoji = (type) => {
   const map = {
-    0: "⚪ Sem impacto",
-    1: "🟡 Movimento brusco",
-    2: "🟠 Impacto moderado",
-    3: "🔴 Queda forte",
+    fall_1: "🟡 Movimento brusco",
+    fall_2: "🟠 Impacto moderado",
+    fall_3: "🔴 Queda forte",
+    need_help: "🔴 Pedido de ajuda",
+    ok: "🟢 Estou bem",
   };
-  return map[level] || "⚪ Evento";
+  return map[type] || "⚪ Evento";
 };
 
 const formatHoraCurta = (date) => {
@@ -40,210 +37,92 @@ const formatHoraCurta = (date) => {
 };
 
 export default function HomeScreen() {
-  const [userData, setUserData] = useState(null);
-  const [isCuidador, setIsCuidador] = useState(false);
-  const [resumoQuedas, setResumoQuedas] = useState({
-    totalHoje: 0,
-    totalSemana: 0,
-    ultimaQueda: null,
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const router = useRouter();
-
   const { createEvent, loading: isCreatingEvent } = useCreateEvent();
 
   const {
     profile: userProfile,
-    loading: isLoading,
+    loading: isLoadingProfile,
     error: profileError,
   } = useProfile();
 
-  useEffect(() => {
-    console.log("🚀 HomeScreen montado, iniciando loadAll...");
-    loadAll();
-  }, []);
+  const { events, loading: isLoadingEvents, error: eventsError } = useEvents();
 
-  const loadAll = async () => {
-    try {
-      console.log("📝 Iniciando loadAll...");
-      setLoading(true);
-      setError(null);
-      await loadUserData();
-      console.log("✅ loadAll concluído com sucesso");
-    } catch (err) {
-      console.error("❌ Erro geral na Home:", err);
-      setError(err.message);
-      Alert.alert("Erro", err.message || "Erro ao carregar dados");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loading = isLoadingProfile || isLoadingEvents;
+  const error = profileError ?? eventsError;
 
-  const loadUserData = async () => {
-    try {
-      console.log("🔐 Iniciando loadUserData...");
-      const user = auth.currentUser;
-      console.log("👤 Current user:", user ? user.uid : "NULL");
-
-      if (!user) {
-        console.log("⚠️ Usuário não autenticado, redirecionando...");
-        Alert.alert("Erro", "Usuário não autenticado");
-        router.replace("/(auth)/login");
-        return;
-      }
-
-      console.log("🔍 Buscando documento do usuário no Firestore...");
-      const userRef = doc(db, "usuarios", user.uid);
-      const usuarioSnap = await getDoc(userRef);
-
-      if (!usuarioSnap.exists()) {
-        console.log("❌ Documento do usuário não encontrado");
-        Alert.alert("Erro", "Dados do usuário não encontrados");
-        return;
-      }
-
-      const usuarioData = usuarioSnap.data();
-      console.log("📋 Dados do usuário carregados:", {
-        nome: usuarioData.nome,
-        email: usuarioData.email,
-        tipoPessoa: usuarioData.tipoPessoa,
-      });
-
-      const userData = {
-        id: user.uid,
-        uid: user.uid,
-        nome: usuarioData.nome,
-        email: usuarioData.email,
-        cpf: usuarioData.cpf,
-        telefone: usuarioData.telefone,
-        tipoPessoa: usuarioData.tipoPessoa,
-        dataNascimento: usuarioData.dataNascimento,
-      };
-
-      setUserData(userData);
-
-      console.log("=================================================");
-      console.log("🔍 VERIFICAÇÃO DETALHADA - TIPO DE USUÁRIO");
-      console.log("=================================================");
-      console.log(
-        "📋 Dados completos do Firestore:",
-        JSON.stringify(usuarioData, null, 2),
-      );
-      console.log("📌 Campo 'tipoPessoa':", usuarioData.tipoPessoa);
-      console.log("📌 Tipo do campo:", typeof usuarioData.tipoPessoa);
-      console.log(
-        "📌 Comparação direta:",
-        usuarioData.tipoPessoa === "cuidador",
-      );
-
-      // MÉTODO 1: Verificar pelo campo tipoPessoa (mais confiável)
-      const ehCuidadorPorTipo = usuarioData.tipoPessoa === "cuidador";
-      console.log(
-        `📊 É cuidador por tipoPessoa? ${ehCuidadorPorTipo ? "SIM ✅" : "NÃO ❌"}`,
-      );
-
-      // MÉTODO 2: Verificar na coleção cuidadores (backup)
-      console.log("\n🔍 Verificando na coleção 'cuidadores'...");
-      const cuidadoresRef = collection(db, "cuidadores");
-      const cuidadorQuery = query(cuidadoresRef, where("uid", "==", user.uid));
-      const cuidadorSnap = await getDocs(cuidadorQuery);
-
-      const ehCuidadorPorColecao = !cuidadorSnap.empty;
-      console.log(
-        `📊 Quantidade de documentos encontrados: ${cuidadorSnap.size}`,
-      );
-      console.log(
-        `📊 É cuidador por coleção? ${ehCuidadorPorColecao ? "SIM ✅" : "NÃO ❌"}`,
-      );
-
-      if (!cuidadorSnap.empty) {
-        cuidadorSnap.forEach((doc) => {
-          console.log("📄 Documento encontrado na coleção cuidadores:");
-          console.log("   - ID do documento:", doc.id);
-          console.log("   - Dados:", JSON.stringify(doc.data(), null, 2));
-        });
-      } else {
-        console.log(
-          "❌ Nenhum documento encontrado na coleção cuidadores para este UID",
-        );
-      }
-
-      // Usar AMBOS os critérios para determinar se é cuidador
-      // Prioriza o tipoPessoa, mas aceita qualquer um dos dois
-      const ehCuidador = ehCuidadorPorTipo || ehCuidadorPorColecao;
-
-      console.log("=================================================");
-      console.log(
-        `🎯 DECISÃO FINAL: ${ehCuidador ? "É CUIDADOR ✅" : "É PACIENTE ❌"}`,
-      );
-      console.log("=================================================");
-
-      setIsCuidador(ehCuidador);
-
-      // Se for usuário/paciente, carregar quedas
-      if (!ehCuidador) {
-        console.log("📊 Usuário é PACIENTE, carregando quedas...");
-        await loadResumoQuedas();
-      } else {
-        console.log("✅ Usuário é CUIDADOR, NÃO carrega quedas");
-      }
-    } catch (error) {
-      console.error("❌ Erro em loadUserData:", error);
-      throw error;
-    }
-  };
-
-  const loadResumoQuedas = async () => {
-    try {
-      console.log("📊 Carregando resumo de quedas...");
-      const quedas = await getQuedasFromFirestore();
-
-      if (!quedas || quedas.length === 0) {
-        console.log("ℹ️ Nenhuma queda encontrada");
-        setResumoQuedas({
-          totalHoje: 0,
-          totalSemana: 0,
-          ultimaQueda: null,
-        });
-        return;
-      }
-
-      console.log(`📊 ${quedas.length} quedas encontradas`);
-
-      const ordenadas = [...quedas].sort(
-        (a, b) => new Date(b.date) - new Date(a.date),
-      );
-
-      const agora = new Date();
-      const hojeStr = agora.toDateString();
-      const seteDiasMs = 7 * 24 * 60 * 60 * 1000;
-
-      let totalHoje = 0;
-      let totalSemana = 0;
-
-      ordenadas.forEach((q) => {
-        const d = new Date(q.date);
-        if (d.toDateString() === hojeStr) totalHoje++;
-        if (agora - d <= seteDiasMs) totalSemana++;
-      });
-
-      console.log(`📊 Resumo: ${totalHoje} hoje, ${totalSemana} na semana`);
-
-      setResumoQuedas({
-        totalHoje,
-        totalSemana,
-        ultimaQueda: ordenadas[0],
-      });
-    } catch (error) {
-      console.error("❌ Erro ao carregar resumo de quedas:", error);
-      setResumoQuedas({
+  const { totalHoje, totalSemana, ultimaQueda } = useMemo(() => {
+    if (!events || events.length === 0) {
+      return {
         totalHoje: 0,
         totalSemana: 0,
         ultimaQueda: null,
-      });
+      };
     }
-  };
+
+    // Filter events that start with "fall"
+    const fallEvents = events.filter(
+      (event) =>
+        event.type &&
+        typeof event.type === "string" &&
+        event.type.toLowerCase().startsWith("fall"),
+    );
+
+    if (fallEvents.length === 0) {
+      return {
+        totalHoje: 0,
+        totalSemana: 0,
+        ultimaQueda: null,
+      };
+    }
+
+    const now = new Date();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    // Count events today
+    const totalHoje = fallEvents.filter((event) => {
+      const eventDate = new Date(event.date);
+      return eventDate >= startOfToday;
+    }).length;
+
+    // Count events in last 7 days
+    const totalSemana = fallEvents.filter((event) => {
+      const eventDate = new Date(event.date);
+      return eventDate >= sevenDaysAgo;
+    }).length;
+
+    // Get the last (most recent) event
+    const sortedEvents = [...fallEvents].sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateB - dateA; // Most recent first
+    });
+
+    const ultimaQueda =
+      sortedEvents.length > 0
+        ? (() => {
+          const lastEvent = sortedEvents[0];
+          const eventDate = new Date(lastEvent.date);
+
+          return {
+            date: eventDate,
+            accMag: lastEvent.accMag || null,
+            type: lastEvent.type,
+          };
+        })()
+        : null;
+
+    return {
+      totalHoje,
+      totalSemana,
+      ultimaQueda,
+    };
+  }, [events]);
 
   const handleCreateEvent = async (type) => {
     await createEvent(type);
@@ -274,21 +153,14 @@ export default function HomeScreen() {
     );
   }
 
-  // ==========================================
-  // 🔀 RENDERIZAÇÃO CONDICIONAL POR TIPO
-  // ==========================================
+  const isCuidador = userProfile !== undefined && !userProfile?.patient;
 
   console.log(`🎨 Renderizando tela... É cuidador? ${isCuidador}`);
 
-  // Se o usuário é cuidador, mostra APENAS a tela de cuidador
   if (isCuidador) {
     console.log("✅ 👨‍⚕️ Renderizando TELA DE CUIDADOR");
-    return <HomeCuidador userData={userData} />;
+    return <HomeCuidador userData={userProfile} />;
   }
-
-  // Caso contrário, mostra a tela de PACIENTE
-  console.log("✅ 👤 Renderizando TELA DE PACIENTE");
-  const { totalHoje, totalSemana, ultimaQueda } = resumoQuedas;
 
   return (
     <ScrollView style={styles.container}>
@@ -356,11 +228,8 @@ export default function HomeScreen() {
           <View style={styles.lastFallBox}>
             <Text style={styles.lastFallTitle}>Última queda registrada</Text>
             <Text style={styles.lastFallText}>
-              {classifyFallEmoji(ultimaQueda.fallLevel)} •{" "}
+              {classifyFallEmoji(ultimaQueda.type)} •{" "}
               {formatHoraCurta(ultimaQueda.date)}
-            </Text>
-            <Text style={styles.lastFallSub}>
-              Intensidade: {ultimaQueda.accMag?.toFixed(2)}g
             </Text>
           </View>
         ) : (
@@ -368,51 +237,6 @@ export default function HomeScreen() {
             Nenhuma queda registrada ainda no sistema.
           </Text>
         )}
-      </View>
-
-      {/* Status do Dispositivo */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Status do Dispositivo</Text>
-        <View style={styles.statusContainer}>
-          <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Bateria</Text>
-            <Text style={styles.statusValue}>85%</Text>
-          </View>
-          <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Conexão</Text>
-            <Text style={[styles.statusValue, styles.connected]}>Ativa</Text>
-          </View>
-          <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Monitor</Text>
-            <Text style={[styles.statusValue, styles.monitoring]}>Ativo</Text>
-          </View>
-        </View>
-        <Text style={styles.deviceNote}>
-          🔧 Esses dados ainda são simulados e serão integrados ao ESP32.
-        </Text>
-      </View>
-
-      {/* Atividade Recente */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Atividade Recente</Text>
-        {ultimaQueda && (
-          <View style={styles.activityItem}>
-            <Text style={styles.activityText}>
-              {classifyFallEmoji(ultimaQueda.fallLevel)} detectada
-            </Text>
-            <Text style={styles.activityTime}>
-              Hoje às {formatHoraCurta(ultimaQueda.date)}
-            </Text>
-          </View>
-        )}
-        <View style={styles.activityItem}>
-          <Text style={styles.activityText}>Status "Estou Bem" enviado</Text>
-          <Text style={styles.activityTime}>Simulado</Text>
-        </View>
-        <View style={styles.activityItem}>
-          <Text style={styles.activityText}>Dispositivo encontrado</Text>
-          <Text style={styles.activityTime}>Simulado</Text>
-        </View>
       </View>
 
       {/* Info de Debug */}
