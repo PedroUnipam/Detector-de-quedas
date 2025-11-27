@@ -1,16 +1,25 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, RefreshControl, TextInput, Modal
-} from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { userAPI, utils } from '../../services/api';
-import { findPessoaByEmail } from '../../services/firestorePessoas';
-import { auth } from '../../services/firebase';
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
+  TextInput,
+  Modal,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { userAPI, utils } from "../../services/api";
+import { findPessoaByEmail } from "../../services/firestorePessoas";
+import { auth } from "../../services/firebase";
 import {
   getCuidadorByEmail,
-  vincularCuidadorAUsuario
-} from '../../services/firestoreVinculos';
+  vincularCuidadorAUsuario,
+} from "../../services/firestoreVinculos";
+import { useProfile } from "../../hooks/useProfile";
 
 export default function ContactsScreen() {
   const [contacts, setContacts] = useState([]);
@@ -22,13 +31,19 @@ export default function ContactsScreen() {
   const [editMode, setEditMode] = useState(false);
   const [nightMode, setNightMode] = useState(false);
 
+  const {
+    profile: userProfile,
+    loading: isLoading,
+    error: profileError,
+  } = useProfile();
+
   const [formData, setFormData] = useState({
     id: null,
-    nome: '',
-    telefone: '',
-    parentesco: '',
+    nome: "",
+    telefone: "",
+    parentesco: "",
     id_tipocuidador: null,
-    email: '',
+    email: "",
   });
 
   useEffect(() => {
@@ -39,13 +54,13 @@ export default function ContactsScreen() {
 
   const loadNightMode = async () => {
     try {
-      const prefs = await AsyncStorage.getItem('userPreferences');
+      const prefs = await AsyncStorage.getItem("userPreferences");
       if (prefs) {
         const { nightMode: night } = JSON.parse(prefs);
         setNightMode(night ?? false);
       }
     } catch (error) {
-      console.error('Erro ao carregar modo noturno:', error);
+      console.error("Erro ao carregar modo noturno:", error);
     }
   };
 
@@ -64,11 +79,11 @@ export default function ContactsScreen() {
 
   const useFallbackTipos = () => {
     const tiposFallback = [
-      { id_tipocuidador: 1, descricao: 'Familiar' },
-      { id_tipocuidador: 2, descricao: 'Enfermeiro' },
-      { id_tipocuidador: 3, descricao: 'Cuidador Profissional' },
-      { id_tipocuidador: 4, descricao: 'Médico' },
-      { id_tipocuidador: 5, descricao: 'Fisioterapeuta' },
+      { id_tipocuidador: 1, descricao: "Familiar" },
+      { id_tipocuidador: 2, descricao: "Enfermeiro" },
+      { id_tipocuidador: 3, descricao: "Cuidador Profissional" },
+      { id_tipocuidador: 4, descricao: "Médico" },
+      { id_tipocuidador: 5, descricao: "Fisioterapeuta" },
     ];
     setTiposCuidador(tiposFallback);
   };
@@ -79,7 +94,7 @@ export default function ContactsScreen() {
       const response = await userAPI.getCuidadores();
       setContacts(response.success ? response.cuidadores || [] : []);
     } catch (error) {
-      Alert.alert('Erro', utils.formatError(error));
+      Alert.alert("Erro", utils.formatError(error));
     } finally {
       setLoading(false);
     }
@@ -92,9 +107,10 @@ export default function ContactsScreen() {
   }, []);
 
   const formatPhone = (text) => {
-    const numbers = text.replace(/\D/g, '');
+    const numbers = text.replace(/\D/g, "");
     if (numbers.length <= 2) return numbers;
-    if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+    if (numbers.length <= 7)
+      return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
     return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
   };
 
@@ -102,18 +118,18 @@ export default function ContactsScreen() {
     setEditMode(false);
     setFormData({
       id: null,
-      nome: '',
-      telefone: '',
-      parentesco: '',
+      nome: "",
+      telefone: "",
+      parentesco: "",
       id_tipocuidador: tiposCuidador[0]?.id_tipocuidador,
-      email: '',
+      email: "",
     });
     setModalVisible(true);
   };
 
   const handleOpenEditModal = (contact) => {
     const tipoEncontrado = tiposCuidador.find(
-      t => t.descricao.toLowerCase() === contact.parentesco?.toLowerCase()
+      (t) => t.descricao.toLowerCase() === contact.parentesco?.toLowerCase(),
     );
     setEditMode(true);
     setFormData({
@@ -131,7 +147,7 @@ export default function ContactsScreen() {
     setFormData({
       ...formData,
       id_tipocuidador: tipo.id_tipocuidador,
-      parentesco: tipo.descricao
+      parentesco: tipo.descricao,
     });
     setPickerVisible(false);
   };
@@ -141,18 +157,24 @@ export default function ContactsScreen() {
   // ==========================================
   const handleVincularCuidador = async () => {
     if (!formData.email?.trim()) {
-      Alert.alert('Atenção', 'Por favor, preencha o e-mail do cuidador');
+      Alert.alert("Atenção", "Por favor, preencha o e-mail do cuidador");
       return;
     }
 
     try {
-      console.log("🔗 Tentando vincular cuidador com email:", formData.email.trim());
+      console.log(
+        "🔗 Tentando vincular cuidador com email:",
+        formData.email.trim(),
+      );
 
       // 1. Verificar se o email é de um cuidador
       const result = await getCuidadorByEmail(formData.email.trim());
 
       if (!result.success) {
-        Alert.alert('Erro', result.message || 'Este email não pertence a um cuidador cadastrado.');
+        Alert.alert(
+          "Erro",
+          result.message || "Este email não pertence a um cuidador cadastrado.",
+        );
         return;
       }
 
@@ -161,37 +183,47 @@ export default function ContactsScreen() {
       // 2. Vincular o cuidador ao usuário atual
       const usuarioAtual = auth.currentUser;
       if (!usuarioAtual) {
-        Alert.alert('Erro', 'Você precisa estar logado.');
+        Alert.alert("Erro", "Você precisa estar logado.");
         return;
       }
 
-      console.log("🔗 Vinculando cuidador", result.cuidador.uid, "ao paciente", usuarioAtual.uid);
+      console.log(
+        "🔗 Vinculando cuidador",
+        result.cuidador.uid,
+        "ao paciente",
+        usuarioAtual.uid,
+      );
 
       const vinculoResult = await vincularCuidadorAUsuario(
         usuarioAtual.uid,
-        result.cuidador.uid
+        result.cuidador.uid,
       );
 
       if (vinculoResult.success) {
         Alert.alert(
-          'Sucesso! 🎉',
-          `O cuidador ${result.cuidador.nome} foi vinculado à sua conta!\n\nEle agora poderá visualizar suas quedas e localização.`
+          "Sucesso! 🎉",
+          `O cuidador ${result.cuidador.nome} foi vinculado à sua conta!\n\nEle agora poderá visualizar suas quedas e localização.`,
         );
 
         // Preencher nome automaticamente se estava vazio
         if (!formData.nome?.trim()) {
-          setFormData(prev => ({
+          setFormData((prev) => ({
             ...prev,
-            nome: result.cuidador.nome
+            nome: result.cuidador.nome,
           }));
         }
       } else {
-        Alert.alert('Erro', vinculoResult.error || 'Não foi possível vincular o cuidador.');
+        Alert.alert(
+          "Erro",
+          vinculoResult.error || "Não foi possível vincular o cuidador.",
+        );
       }
-
     } catch (error) {
-      console.error('❌ Erro ao vincular cuidador:', error);
-      Alert.alert('Erro', 'Falha ao vincular cuidador: ' + (error.message || 'Erro desconhecido'));
+      console.error("❌ Erro ao vincular cuidador:", error);
+      Alert.alert(
+        "Erro",
+        "Falha ao vincular cuidador: " + (error.message || "Erro desconhecido"),
+      );
     }
   };
 
@@ -202,15 +234,21 @@ export default function ContactsScreen() {
     if (!formData.email?.trim()) return true;
 
     const email = formData.email.trim();
-    
+
     try {
       const result = await findPessoaByEmail(email);
 
       if (!result.ok) {
         if (result.reason === "not_found") {
-          Alert.alert("E-mail não encontrado", "Nenhum usuário registrado com este e-mail.");
+          Alert.alert(
+            "E-mail não encontrado",
+            "Nenhum usuário registrado com este e-mail.",
+          );
         } else if (result.reason === "inactive") {
-          Alert.alert("Usuário inativo", "Este usuário existe, mas não está ativo.");
+          Alert.alert(
+            "Usuário inativo",
+            "Este usuário existe, mas não está ativo.",
+          );
         } else {
           Alert.alert("Erro", "Falha ao validar o e-mail.");
         }
@@ -219,9 +257,9 @@ export default function ContactsScreen() {
 
       // Se usuário existe, usa nome real caso campo nome esteja vazio
       if (!formData.nome?.trim() && result.user?.nome) {
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
-          nome: result.user.nome
+          nome: result.user.nome,
         }));
       }
 
@@ -238,22 +276,22 @@ export default function ContactsScreen() {
   // ==========================================
   const handleSaveContact = async () => {
     if (!formData.nome?.trim()) {
-      Alert.alert('Atenção', 'Por favor, preencha o nome');
+      Alert.alert("Atenção", "Por favor, preencha o nome");
       return;
     }
     if (!formData.telefone?.trim()) {
-      Alert.alert('Atenção', 'Por favor, preencha o telefone');
+      Alert.alert("Atenção", "Por favor, preencha o telefone");
       return;
     }
 
     // 🔍 Valida email no Firestore (se a função existir)
-    if (typeof findPessoaByEmail === 'function') {
+    if (typeof findPessoaByEmail === "function") {
       const emailIsValid = await validateEmailInFirestore();
       if (!emailIsValid) return;
     }
 
     const tipoSelecionado = tiposCuidador.find(
-      tipo => tipo.id_tipocuidador === formData.id_tipocuidador
+      (tipo) => tipo.id_tipocuidador === formData.id_tipocuidador,
     );
 
     const dataToSend = {
@@ -273,43 +311,48 @@ export default function ContactsScreen() {
       }
 
       if (response.success) {
-        Alert.alert('Sucesso', editMode ? 'Contato atualizado!' : 'Contato adicionado!');
+        Alert.alert(
+          "Sucesso",
+          editMode ? "Contato atualizado!" : "Contato adicionado!",
+        );
         setModalVisible(false);
         await loadContacts();
       } else {
-        Alert.alert('Erro', response.message || 'Erro ao salvar contato');
+        Alert.alert("Erro", response.message || "Erro ao salvar contato");
       }
     } catch (error) {
       console.error("Erro ao salvar contato:", error);
-      Alert.alert('Erro', utils.formatError(error));
+      Alert.alert("Erro", utils.formatError(error));
     }
   };
 
   const handleRemoveContact = (contact) => {
     Alert.alert(
-      'Remover Contato',
+      "Remover Contato",
       `Deseja realmente remover ${contact.nome}?`,
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: "Cancelar", style: "cancel" },
         {
-          text: 'Remover',
-          style: 'destructive',
+          text: "Remover",
+          style: "destructive",
           onPress: async () => {
             const response = await userAPI.removeCuidador(contact.id);
             if (response.success) {
-              Alert.alert('Sucesso', 'Contato removido!');
+              Alert.alert("Sucesso", "Contato removido!");
               loadContacts();
             } else {
-              Alert.alert('Erro', response.message);
+              Alert.alert("Erro", response.message);
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   const getSelectedTipoLabel = () => {
-    const tipo = tiposCuidador.find(t => t.id_tipocuidador === formData.id_tipocuidador);
+    const tipo = tiposCuidador.find(
+      (t) => t.id_tipocuidador === formData.id_tipocuidador,
+    );
     return tipo?.descricao || "Selecione o tipo";
   };
 
@@ -331,15 +374,13 @@ export default function ContactsScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={nightMode ? '#fff' : '#007AFF'}
+          tintColor={nightMode ? "#fff" : "#007AFF"}
         />
       }
     >
       <View style={styles.header}>
         <Text style={styles.title}>Contatos de Emergência</Text>
-        <Text style={styles.subtitle}>
-          {contacts.length} cadastrados
-        </Text>
+        <Text style={styles.subtitle}>{contacts.length} cadastrados</Text>
       </View>
 
       <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>
@@ -352,7 +393,9 @@ export default function ContactsScreen() {
             <Text style={styles.contactName}>{contact.nome}</Text>
             <Text style={styles.contactPhone}>{contact.telefone}</Text>
             <Text style={styles.contactRelationship}>{contact.parentesco}</Text>
-            {contact.email && <Text style={styles.contactEmail}>📧 {contact.email}</Text>}
+            {contact.email && (
+              <Text style={styles.contactEmail}>📧 {contact.email}</Text>
+            )}
           </View>
 
           <View style={styles.actionButtons}>
@@ -372,14 +415,14 @@ export default function ContactsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
-              {editMode ? 'Editar Contato' : 'Novo Contato'}
+              {editMode ? "Editar Contato" : "Novo Contato"}
             </Text>
 
             <TextInput
               style={styles.input}
               placeholder="Nome"
               value={formData.nome}
-              onChangeText={v => setFormData({ ...formData, nome: v })}
+              onChangeText={(v) => setFormData({ ...formData, nome: v })}
             />
 
             <TextInput
@@ -387,7 +430,9 @@ export default function ContactsScreen() {
               placeholder="Telefone"
               keyboardType="phone-pad"
               value={formData.telefone}
-              onChangeText={v => setFormData({ ...formData, telefone: formatPhone(v) })}
+              onChangeText={(v) =>
+                setFormData({ ...formData, telefone: formatPhone(v) })
+              }
             />
 
             <TouchableOpacity
@@ -402,7 +447,7 @@ export default function ContactsScreen() {
               style={styles.input}
               placeholder="E-mail (opcional)"
               value={formData.email}
-              onChangeText={v => setFormData({ ...formData, email: v })}
+              onChangeText={(v) => setFormData({ ...formData, email: v })}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -418,8 +463,8 @@ export default function ContactsScreen() {
             </TouchableOpacity>
 
             <Text style={styles.vinculateHint}>
-              💡 Se este email for de um cuidador cadastrado, clique acima para vinculá-lo.
-              Assim ele poderá acompanhar suas quedas e localização.
+              💡 Se este email for de um cuidador cadastrado, clique acima para
+              vinculá-lo. Assim ele poderá acompanhar suas quedas e localização.
             </Text>
 
             <View style={styles.modalButtons}>
@@ -430,9 +475,12 @@ export default function ContactsScreen() {
                 <Text style={styles.cancelButtonText}>Cancelar</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveContact}>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={handleSaveContact}
+              >
                 <Text style={styles.saveButtonText}>
-                  {editMode ? 'Atualizar' : 'Salvar'}
+                  {editMode ? "Atualizar" : "Salvar"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -442,7 +490,10 @@ export default function ContactsScreen() {
 
       {/* MODAL PICKER */}
       <Modal visible={pickerVisible} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerModalOverlay} onPress={() => setPickerVisible(false)}>
+        <TouchableOpacity
+          style={styles.pickerModalOverlay}
+          onPress={() => setPickerVisible(false)}
+        >
           <View style={styles.pickerModalContent}>
             <Text style={styles.pickerModalTitle}>Selecione o tipo</Text>
 
@@ -454,7 +505,9 @@ export default function ContactsScreen() {
                   onPress={() => handleSelectTipo(t)}
                 >
                   <Text>{t.descricao}</Text>
-                  {formData.id_tipocuidador === t.id_tipocuidador && <Text>✓</Text>}
+                  {formData.id_tipocuidador === t.id_tipocuidador && (
+                    <Text>✓</Text>
+                  )}
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -475,30 +528,30 @@ export default function ContactsScreen() {
 const getStyles = (nightMode) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: nightMode ? "#1a1a1a" : "#f5f5f5" },
-    centerContainer: { 
-      flex: 1, 
-      justifyContent: "center", 
+    centerContainer: {
+      flex: 1,
+      justifyContent: "center",
       alignItems: "center",
-      backgroundColor: nightMode ? "#1a1a1a" : "#f5f5f5"
+      backgroundColor: nightMode ? "#1a1a1a" : "#f5f5f5",
     },
     loadingText: {
       marginTop: 10,
       color: nightMode ? "#fff" : "#666",
     },
-    header: { 
-      padding: 20, 
+    header: {
+      padding: 20,
       backgroundColor: nightMode ? "#2a2a2a" : "#fff",
       borderBottomWidth: 1,
-      borderBottomColor: nightMode ? "#444" : "#e0e0e0"
+      borderBottomColor: nightMode ? "#444" : "#e0e0e0",
     },
-    title: { 
-      fontSize: 22, 
+    title: {
+      fontSize: 22,
       fontWeight: "bold",
-      color: nightMode ? "#fff" : "#333"
+      color: nightMode ? "#fff" : "#333",
     },
-    subtitle: { 
-      color: nightMode ? "#aaa" : "#555", 
-      marginTop: 5 
+    subtitle: {
+      color: nightMode ? "#aaa" : "#555",
+      marginTop: 5,
     },
     addButton: {
       backgroundColor: "#007AFF",
@@ -523,29 +576,29 @@ const getStyles = (nightMode) =>
       elevation: 3,
     },
     contactInfo: { flex: 1 },
-    contactName: { 
-      fontSize: 16, 
+    contactName: {
+      fontSize: 16,
       fontWeight: "bold",
-      color: nightMode ? "#fff" : "#333"
+      color: nightMode ? "#fff" : "#333",
     },
-    contactPhone: { 
+    contactPhone: {
       color: nightMode ? "#bbb" : "#555",
-      marginTop: 4
+      marginTop: 4,
     },
-    contactRelationship: { 
-      fontStyle: "italic", 
+    contactRelationship: {
+      fontStyle: "italic",
       color: nightMode ? "#999" : "#777",
-      marginTop: 4
+      marginTop: 4,
     },
-    contactEmail: { 
-      marginTop: 6, 
+    contactEmail: {
+      marginTop: 6,
       color: nightMode ? "#aaa" : "#333",
-      fontSize: 13
+      fontSize: 13,
     },
-    actionButtons: { 
+    actionButtons: {
       justifyContent: "center",
       flexDirection: "row",
-      gap: 15
+      gap: 15,
     },
     editButtonText: { fontSize: 22 },
     removeButtonText: { fontSize: 22 },
@@ -562,11 +615,11 @@ const getStyles = (nightMode) =>
       width: "90%",
       maxHeight: "80%",
     },
-    modalTitle: { 
-      fontSize: 20, 
-      fontWeight: "bold", 
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "bold",
       marginBottom: 15,
-      color: nightMode ? "#fff" : "#333"
+      color: nightMode ? "#fff" : "#333",
     },
     input: {
       backgroundColor: nightMode ? "#1a1a1a" : "#f1f1f1",
@@ -605,10 +658,10 @@ const getStyles = (nightMode) =>
       lineHeight: 18,
       textAlign: "center",
     },
-    modalButtons: { 
-      flexDirection: "row", 
+    modalButtons: {
+      flexDirection: "row",
       justifyContent: "space-between",
-      marginTop: 10
+      marginTop: 10,
     },
     cancelButton: {
       backgroundColor: nightMode ? "#444" : "#ccc",
@@ -618,9 +671,9 @@ const getStyles = (nightMode) =>
       marginRight: 8,
       alignItems: "center",
     },
-    cancelButtonText: { 
+    cancelButtonText: {
       fontWeight: "bold",
-      color: nightMode ? "#fff" : "#333"
+      color: nightMode ? "#fff" : "#333",
     },
     saveButton: {
       backgroundColor: "#007AFF",
@@ -644,12 +697,12 @@ const getStyles = (nightMode) =>
       width: "80%",
       maxHeight: "70%",
     },
-    pickerModalTitle: { 
-      fontSize: 18, 
-      textAlign: "center", 
+    pickerModalTitle: {
+      fontSize: 18,
+      textAlign: "center",
       marginBottom: 15,
       fontWeight: "600",
-      color: nightMode ? "#fff" : "#333"
+      color: nightMode ? "#fff" : "#333",
     },
     pickerItem: {
       flexDirection: "row",
@@ -664,9 +717,9 @@ const getStyles = (nightMode) =>
       borderRadius: 8,
       marginTop: 15,
     },
-    pickerCloseButtonText: { 
-      color: "#fff", 
+    pickerCloseButtonText: {
+      color: "#fff",
       textAlign: "center",
-      fontWeight: "600"
+      fontWeight: "600",
     },
   });

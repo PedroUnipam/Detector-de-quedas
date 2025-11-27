@@ -15,10 +15,12 @@ export default function TabLayout() {
     if (!fbUser) router.replace("/login");
   }, []);
 
-  const { data: user, isPending, isLoading } = useProfile();
+  // const { data: user, isPending, isLoading } = useProfile();
   const router = useRouter();
 
-  const isCuidador = !user?.patient;
+  const isCuidador = false;
+  const isLoading = false;
+  const isPending = false;
 
   if (isLoading || isPending) {
     console.log("⏳ Tabs Layout: Carregando tipo de usuário...");

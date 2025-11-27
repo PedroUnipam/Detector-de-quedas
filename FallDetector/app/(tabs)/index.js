@@ -12,11 +12,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { authAPI, utils } from "../../services/api";
 import { getQuedasFromFirestore } from "../../services/firestoreQuedas";
 import HomeCuidador from "../../components/HomeCuidador";
 import { auth, db } from "../../services/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
+import { useProfile } from "../../hooks/useProfile";
 
 // ==========================
 // Ajuda visual para intensidade
@@ -49,6 +49,12 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const router = useRouter();
+
+  const {
+    profile: userProfile,
+    loading: isLoading,
+    error: profileError,
+  } = useProfile();
 
   useEffect(() => {
     console.log("🚀 HomeScreen montado, iniciando loadAll...");
@@ -98,7 +104,7 @@ export default function HomeScreen() {
       console.log("📋 Dados do usuário carregados:", {
         nome: usuarioData.nome,
         email: usuarioData.email,
-        tipoPessoa: usuarioData.tipoPessoa
+        tipoPessoa: usuarioData.tipoPessoa,
       });
 
       const userData = {
@@ -117,14 +123,22 @@ export default function HomeScreen() {
       console.log("=================================================");
       console.log("🔍 VERIFICAÇÃO DETALHADA - TIPO DE USUÁRIO");
       console.log("=================================================");
-      console.log("📋 Dados completos do Firestore:", JSON.stringify(usuarioData, null, 2));
+      console.log(
+        "📋 Dados completos do Firestore:",
+        JSON.stringify(usuarioData, null, 2),
+      );
       console.log("📌 Campo 'tipoPessoa':", usuarioData.tipoPessoa);
       console.log("📌 Tipo do campo:", typeof usuarioData.tipoPessoa);
-      console.log("📌 Comparação direta:", usuarioData.tipoPessoa === "cuidador");
+      console.log(
+        "📌 Comparação direta:",
+        usuarioData.tipoPessoa === "cuidador",
+      );
 
       // MÉTODO 1: Verificar pelo campo tipoPessoa (mais confiável)
       const ehCuidadorPorTipo = usuarioData.tipoPessoa === "cuidador";
-      console.log(`📊 É cuidador por tipoPessoa? ${ehCuidadorPorTipo ? "SIM ✅" : "NÃO ❌"}`);
+      console.log(
+        `📊 É cuidador por tipoPessoa? ${ehCuidadorPorTipo ? "SIM ✅" : "NÃO ❌"}`,
+      );
 
       // MÉTODO 2: Verificar na coleção cuidadores (backup)
       console.log("\n🔍 Verificando na coleção 'cuidadores'...");
@@ -133,8 +147,12 @@ export default function HomeScreen() {
       const cuidadorSnap = await getDocs(cuidadorQuery);
 
       const ehCuidadorPorColecao = !cuidadorSnap.empty;
-      console.log(`📊 Quantidade de documentos encontrados: ${cuidadorSnap.size}`);
-      console.log(`📊 É cuidador por coleção? ${ehCuidadorPorColecao ? "SIM ✅" : "NÃO ❌"}`);
+      console.log(
+        `📊 Quantidade de documentos encontrados: ${cuidadorSnap.size}`,
+      );
+      console.log(
+        `📊 É cuidador por coleção? ${ehCuidadorPorColecao ? "SIM ✅" : "NÃO ❌"}`,
+      );
 
       if (!cuidadorSnap.empty) {
         cuidadorSnap.forEach((doc) => {
@@ -143,7 +161,9 @@ export default function HomeScreen() {
           console.log("   - Dados:", JSON.stringify(doc.data(), null, 2));
         });
       } else {
-        console.log("❌ Nenhum documento encontrado na coleção cuidadores para este UID");
+        console.log(
+          "❌ Nenhum documento encontrado na coleção cuidadores para este UID",
+        );
       }
 
       // Usar AMBOS os critérios para determinar se é cuidador
@@ -151,7 +171,9 @@ export default function HomeScreen() {
       const ehCuidador = ehCuidadorPorTipo || ehCuidadorPorColecao;
 
       console.log("=================================================");
-      console.log(`🎯 DECISÃO FINAL: ${ehCuidador ? "É CUIDADOR ✅" : "É PACIENTE ❌"}`);
+      console.log(
+        `🎯 DECISÃO FINAL: ${ehCuidador ? "É CUIDADOR ✅" : "É PACIENTE ❌"}`,
+      );
       console.log("=================================================");
 
       setIsCuidador(ehCuidador);
@@ -163,7 +185,6 @@ export default function HomeScreen() {
       } else {
         console.log("✅ Usuário é CUIDADOR, NÃO carrega quedas");
       }
-
     } catch (error) {
       console.error("❌ Erro em loadUserData:", error);
       throw error;
@@ -188,7 +209,7 @@ export default function HomeScreen() {
       console.log(`📊 ${quedas.length} quedas encontradas`);
 
       const ordenadas = [...quedas].sort(
-        (a, b) => new Date(b.date) - new Date(a.date)
+        (a, b) => new Date(b.date) - new Date(a.date),
       );
 
       const agora = new Date();
@@ -221,31 +242,17 @@ export default function HomeScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert("Sair", "Deseja realmente sair do aplicativo?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: async () => {
-          await authAPI.logout();
-          router.replace("/(auth)/login");
-        },
-      },
-    ]);
-  };
-
   const handleEstouBem = () => {
     Alert.alert(
       "Status enviado",
-      "Seu status 'Estou Bem' foi registrado (simulado)."
+      "Seu status 'Estou Bem' foi registrado (simulado).",
     );
   };
 
   const handlePedirAjuda = () => {
     Alert.alert(
       "Ajuda solicitada",
-      "Um pedido de ajuda foi enviado para os contatos de emergência (simulado)."
+      "Um pedido de ajuda foi enviado para os contatos de emergência (simulado).",
     );
   };
 
@@ -293,7 +300,7 @@ export default function HomeScreen() {
     <ScrollView style={styles.container}>
       {/* Cabeçalho / Usuário */}
       <View style={styles.header}>
-        <Text style={styles.title}>Olá, {userData?.nome || "Usuário"}!</Text>
+        <Text style={styles.title}>Olá, {userProfile?.name || "Usuário"}!</Text>
         <Text style={styles.subtitle}>
           {totalHoje === 0
             ? "Nenhuma queda registrada hoje."
