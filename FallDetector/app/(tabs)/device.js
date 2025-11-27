@@ -18,6 +18,8 @@ import {
   collection,
 } from "firebase/firestore";
 
+import { useProfile } from "../../hooks/useProfile";
+
 export default function DeviceScreen() {
   // ==========================
   // ESTADOS ESP32 (CONFIG Wi-Fi)
@@ -32,51 +34,20 @@ export default function DeviceScreen() {
   const [configuringWifi, setConfiguringWifi] = useState(false);
   const [resettingWifi, setResettingWifi] = useState(false);
 
+  const { profile, loading: loadingProfile } = useProfile();
+
+  const loading = loadingProfile;
+  const savingDevice = false;
+
+  console.log(profile);
+
+  const device = profile?.device;
+
   // ==========================
   // ESTADOS DISPOSITIVO / FIRESTORE
   // ==========================
   const [deviceId, setDeviceId] = useState("esp32-1");
-  const [deviceName, setDeviceName] = useState("Sensor de Quedas");
-  const [devices, setDevices] = useState([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-  const [savingDevice, setSavingDevice] = useState(false);
   const [removingDeviceId, setRemovingDeviceId] = useState(null);
-
-  // ==========================
-  // CARREGAR DISPOSITIVOS AO ABRIR TELA
-  // ==========================
-  useEffect(() => {
-    carregarDispositivos();
-  }, []);
-
-  const getUid = () => {
-    const user = auth.currentUser;
-    if (!user) return null;
-    return user.uid;
-  };
-
-  const carregarDispositivos = async () => {
-    try {
-      const uid = getUid();
-      if (!uid) return;
-
-      setLoadingDevices(true);
-
-      const colRef = collection(db, "usuarios", uid, "dispositivos");
-      const snapshot = await getDocs(colRef);
-      const lista = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-
-      setDevices(lista);
-    } catch (error) {
-      console.error("❌ Erro ao carregar dispositivos:", error);
-      Alert.alert("Erro", "Não foi possível carregar seus dispositivos.");
-    } finally {
-      setLoadingDevices(false);
-    }
-  };
 
   // ==========================
   // STATUS DO ESP32 (/status)
@@ -135,14 +106,14 @@ export default function DeviceScreen() {
               console.error("Erro ao resetar Wi-Fi do ESP:", error);
               Alert.alert(
                 "Erro",
-                "Não foi possível enviar comando de reset. Confira se o IP está correto e se você está na rede do ESP."
+                "Não foi possível enviar comando de reset. Confira se o IP está correto e se você está na rede do ESP.",
               );
             } finally {
               setResettingWifi(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -185,19 +156,19 @@ export default function DeviceScreen() {
       if (json.success === false) {
         Alert.alert(
           "Falha",
-          "O ESP32 não conseguiu conectar na rede informada."
+          "O ESP32 não conseguiu conectar na rede informada.",
         );
       } else {
         Alert.alert(
           "Sucesso",
-          "Wi-Fi enviado. O ESP32 deve reiniciar e tentar conectar à nova rede."
+          "Wi-Fi enviado. O ESP32 deve reiniciar e tentar conectar à nova rede.",
         );
       }
     } catch (error) {
       console.error("Erro ao enviar Wi-Fi para ESP:", error);
       Alert.alert(
         "Erro",
-        "Não foi possível enviar as credenciais. Verifique se está conectado ao Wi-Fi do ESP (FallDetector-Setup) e se o IP está correto."
+        "Não foi possível enviar as credenciais. Verifique se está conectado ao Wi-Fi do ESP (FallDetector-Setup) e se o IP está correto.",
       );
     } finally {
       setConfiguringWifi(false);
@@ -207,80 +178,38 @@ export default function DeviceScreen() {
   // ==========================
   // REGISTRAR DISPOSITIVO NO FIRESTORE
   // ==========================
-  const registrarDispositivo = async () => {
-    const uid = getUid();
-    if (!uid) {
-      Alert.alert("Atenção", "Você precisa estar logado para registrar um dispositivo.");
-      return;
-    }
-
-    if (!deviceId || !deviceName || !ssid) {
-      Alert.alert(
-        "Atenção",
-        "Informe o ID do dispositivo, o nome amigável e o SSID em que ele ficará."
-      );
-      return;
-    }
-
-    try {
-      setSavingDevice(true);
-      const ref = doc(db, "usuarios", uid, "dispositivos", deviceId.trim());
-
-      await setDoc(ref, {
-        deviceId: deviceId.trim(),
-        nome: deviceName.trim(),
-        wifiSsid: ssid.trim(),
-        ownerUid: uid,
-        createdAt: new Date().toISOString(),
-      });
-
-      Alert.alert("Sucesso", "Dispositivo registrado com sucesso!");
-      carregarDispositivos();
-    } catch (error) {
-      console.error("Erro ao registrar dispositivo:", error);
-      Alert.alert(
-        "Erro",
-        error.message || "Não foi possível registrar o dispositivo."
-      );
-    } finally {
-      setSavingDevice(false);
-    }
-  };
+  const registrarDispositivo = async () => { }; // TODO;
 
   // ==========================
   // REMOVER DISPOSITIVO DO FIRESTORE
   // ==========================
   const removerDispositivo = (id) => {
-    Alert.alert(
-      "Confirmar",
-      "Deseja realmente remover este dispositivo?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Remover",
-          style: "destructive",
-          onPress: async () => {
-            const uid = getUid();
-            if (!uid) return;
+    Alert.alert("Confirmar", "Deseja realmente remover este dispositivo?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Remover",
+        style: "destructive",
+        onPress: async () => {
+          const uid = getUid();
+          if (!uid) return;
 
-            try {
-              setRemovingDeviceId(id);
-              const ref = doc(db, "usuarios", uid, "dispositivos", id);
-              await deleteDoc(ref);
-              carregarDispositivos();
-            } catch (error) {
-              console.error("Erro ao remover dispositivo:", error);
-              Alert.alert(
-                "Erro",
-                error.message || "Não foi possível remover o dispositivo."
-              );
-            } finally {
-              setRemovingDeviceId(null);
-            }
-          },
+          try {
+            setRemovingDeviceId(id);
+            const ref = doc(db, "usuarios", uid, "dispositivos", id);
+            await deleteDoc(ref);
+            carregarDispositivos();
+          } catch (error) {
+            console.error("Erro ao remover dispositivo:", error);
+            Alert.alert(
+              "Erro",
+              error.message || "Não foi possível remover o dispositivo.",
+            );
+          } finally {
+            setRemovingDeviceId(null);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   // ==========================
@@ -300,12 +229,7 @@ export default function DeviceScreen() {
         placeholder="Ex: 192.168.4.1 (modo AP) ou IP na rede"
       />
 
-      <Text
-        style={[
-          styles.status,
-          espOnline ? styles.online : styles.offline,
-        ]}
-      >
+      <Text style={[styles.status, espOnline ? styles.online : styles.offline]}>
         {espStatus}
       </Text>
 
@@ -391,14 +315,6 @@ export default function DeviceScreen() {
         autoCapitalize="none"
       />
 
-      <Text style={styles.label}>Nome amigável</Text>
-      <TextInput
-        style={styles.input}
-        value={deviceName}
-        onChangeText={setDeviceName}
-        placeholder="ex: Sensor Quarto"
-      />
-
       <TouchableOpacity
         style={[styles.button, { backgroundColor: "#4caf50" }]}
         onPress={registrarDispositivo}
@@ -413,34 +329,30 @@ export default function DeviceScreen() {
 
       <View style={styles.divider} />
 
-      {/* ======================= LISTA DE DISPOSITIVOS ======================= */}
-      <Text style={styles.title}>Meus Dispositivos</Text>
+      <Text style={styles.title}>Meu Dispositivo</Text>
 
-      {loadingDevices ? (
+      {loadingProfile ? (
         <ActivityIndicator size="large" color="#000" />
-      ) : devices.length === 0 ? (
+      ) : !device ? (
         <Text style={{ marginTop: 10 }}>Nenhum dispositivo registrado.</Text>
       ) : (
-        devices.map((dev) => (
-          <View key={dev.id} style={styles.deviceCard}>
-            <Text style={styles.deviceTitle}>{dev.nome || dev.deviceId}</Text>
-            <Text style={styles.deviceText}>ID: {dev.deviceId}</Text>
-            {dev.wifiSsid ? (
-              <Text style={styles.deviceText}>Wi-Fi: {dev.wifiSsid}</Text>
-            ) : null}
-            <TouchableOpacity
-              style={[styles.button, { marginTop: 10, backgroundColor: "#e11d48" }]}
-              onPress={() => removerDispositivo(dev.id)}
-              disabled={removingDeviceId === dev.id}
-            >
-              {removingDeviceId === dev.id ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Remover</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        ))
+        <View style={styles.deviceCard}>
+          <Text style={styles.deviceText}>ID: {device}</Text>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              { marginTop: 10, backgroundColor: "#e11d48" },
+            ]}
+            onPress={() => removerDispositivo(dev.id)}
+            disabled={removingDeviceId === device}
+          >
+            {removingDeviceId === device ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Remover</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       )}
     </ScrollView>
   );
