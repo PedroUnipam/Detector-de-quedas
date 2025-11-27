@@ -17,6 +17,7 @@ import HomeCuidador from "../../components/HomeCuidador";
 import { auth, db } from "../../services/firebase";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { useProfile } from "../../hooks/useProfile";
+import { useCreateEvent } from "../../hooks/useCreateEvent";
 
 // ==========================
 // Ajuda visual para intensidade
@@ -49,6 +50,8 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const router = useRouter();
+
+  const { createEvent, loading: isCreatingEvent } = useCreateEvent();
 
   const {
     profile: userProfile,
@@ -242,18 +245,9 @@ export default function HomeScreen() {
     }
   };
 
-  const handleEstouBem = () => {
-    Alert.alert(
-      "Status enviado",
-      "Seu status 'Estou Bem' foi registrado (simulado).",
-    );
-  };
-
-  const handlePedirAjuda = () => {
-    Alert.alert(
-      "Ajuda solicitada",
-      "Um pedido de ajuda foi enviado para os contatos de emergência (simulado).",
-    );
+  const handleCreateEvent = async (type) => {
+    await createEvent(type);
+    Alert.alert("Comando enviado. Cuidadores notificados!");
   };
 
   // Tela de loading
@@ -298,6 +292,11 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      {isCreatingEvent && (
+        <View style={styles.isCreatingEvent}>
+          <ActivityIndicator size="large" />
+        </View>
+      )}
       {/* Cabeçalho / Usuário */}
       <View style={styles.header}>
         <Text style={styles.title}>Olá, {userProfile?.name || "Usuário"}!</Text>
@@ -306,14 +305,22 @@ export default function HomeScreen() {
       {/* Comandos Rápidos - APENAS PARA PACIENTES */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Comandos Rápidos</Text>
-        <TouchableOpacity style={styles.quickAction} onPress={handleEstouBem}>
+        <TouchableOpacity
+          style={styles.quickAction}
+          disabled={isCreatingEvent}
+          onPress={() => handleCreateEvent("ok")}
+        >
           <Text style={styles.quickActionText}>✅ Estou Bem</Text>
           <Text style={styles.quickActionHint}>
             Use para avisar que está tudo bem após um alerta.
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.quickAction} onPress={handlePedirAjuda}>
+        <TouchableOpacity
+          style={styles.quickAction}
+          disabled={isCreatingEvent}
+          onPress={() => handleCreateEvent("need_help")}
+        >
           <Text style={styles.quickActionText}>🆘 Pedir Ajuda</Text>
           <Text style={styles.quickActionHint}>
             Simulação de envio de alerta para seus contatos de emergência.
@@ -668,5 +675,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 8,
     borderRadius: 5,
+  },
+  isCreatingEvent: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

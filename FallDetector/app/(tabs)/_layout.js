@@ -1,6 +1,6 @@
 // app/(tabs)/_layout.js
 
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../../contexts/auth";
@@ -15,8 +15,6 @@ export default function TabLayout() {
   const { setNotificationToken } = useSetNotificationToken();
 
   useEffect(() => {
-    if (!fbUser) router.replace("/login");
-
     (async function () {
       try {
         const projectId =
@@ -41,7 +39,8 @@ export default function TabLayout() {
   }, []);
 
   // const { data: user, isPending, isLoading } = useProfile();
-  const router = useRouter();
+
+  if (!fbUser) return <Redirect href="/login" />;
 
   const isCuidador = false;
   const isLoading = false;
