@@ -74,50 +74,10 @@ const queryClient = new QueryClient({
 // 🔐 ROOT LAYOUT
 // ============================================================
 export default function RootLayout() {
-  const router = useRouter();
-  const segments = useSegments();
-
-  const [loading, setLoading] = useState(true);
-  const [logged, setLogged] = useState(false);
-
-  // Autenticação Firebase
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      const token = await AsyncStorage.getItem("authToken");
-
-      if (user && token) {
-        setLogged(true);
-      } else {
-        setLogged(false);
-      }
-
-      setLoading(false);
-    });
-
-    return unsub;
-  }, []);
-
-  // Navegação condicional
-  useEffect(() => {
-    if (loading) return;
-
-    const inAuthGroup = segments[0] === "(auth)";
-
-    if (!logged && !inAuthGroup) {
-      router.replace("/login");
-    }
-
-    if (logged && inAuthGroup) {
-      router.replace("/(tabs)");
-    }
-  }, [logged, loading, segments]);
-
   // Configurar notificações assim que o app carregar
   useEffect(() => {
     configureNotifications();
   }, []);
-
-  if (loading) return null;
 
   return (
     <QueryClientProvider client={queryClient}>

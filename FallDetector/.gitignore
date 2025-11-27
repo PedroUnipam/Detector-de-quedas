@@ -43,3 +43,4 @@ app-example
 /android
 /ios
 serviceAccountKey.json
+.env

@@ -1,9 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
-import { useApi } from "./useApi";
+import axios from "axios";
+
+const api = axios.create({
+  baseURL: process.env.EXPO_PUBLIC_API_URL,
+});
 
 export function useRegister() {
-  const api = useApi();
-
   return useMutation({
     /**
      * @param {{

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { auth } from "../services/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * @typedef {Object} AuthContextValue
@@ -27,15 +28,18 @@ export function AuthProvider({ children }) {
   // Subscribe to auth state changes
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-      setUser(firebaseUser);
       setLoading(false);
 
       try {
         if (firebaseUser) {
+          setUser(firebaseUser);
           const idToken = await firebaseUser.getIdToken();
           setToken(idToken);
+          await AsyncStorage.setItem("token", idToken);
         } else {
           setToken(null);
+          setUser(null);
+          await AsyncStorage.removeItem("token");
         }
       } catch (err) {
         console.error("Falha ao buscar idToken");
