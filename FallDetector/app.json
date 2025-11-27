@@ -15,10 +15,7 @@
     "android": {
       "package": "com.anonymous.FallDetector",
       "googleServicesFile": "./google-services.json",
-      "permissions": [
-        "INTERNET",
-        "NOTIFICATIONS"
-      ],
+      "permissions": ["INTERNET", "NOTIFICATIONS"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -48,7 +45,7 @@
         "projectId": "2880f5ae-7ae2-4edf-ba39-9d9e397c6425"
       }
     },
-    "owner": "thallysgmb",
+    "owner": "projetofaculdade",
     "ios": {
       "runtimeVersion": {
         "policy": "appVersion"
