@@ -177,31 +177,31 @@ void handleResetWifi() {
 // RECEBE JSON { "ssid": "...", "password": "..." }
 void handleConfigWifi() {
   handleCors();
-  if (!server.hasArg("plain")) {
-    server.send(400, "text/plain", "JSON obrigatório");
-    return;
-  }
+  // if (!server.hasArg("plain")) {
+  //   server.send(400, "text/plain", "JSON obrigatório");
+  //   return;
+  // }
 
-  String body = server.arg("plain");
-  StaticJsonDocument<256> doc;
-  DeserializationError err = deserializeJson(doc, body);
+  // String body = server.arg("plain");
+  // StaticJsonDocument<256> doc;
+  // DeserializationError err = deserializeJson(doc, body);
 
-  if (err) {
-    server.send(400, "text/plain", "JSON inválido");
-    return;
-  }
+  // if (err) {
+  //   server.send(400, "text/plain", "JSON inválido");
+  //   return;
+  // }
 
-  String newSsid = doc["ssid"].as<String>();
-  String newPass = doc["password"].as<String>();
+  // String newSsid = doc["ssid"].as<String>();
+  // String newPass = doc["password"].as<String>();
 
-  Serial.println("📡 Recebido novo WiFi:");
-  Serial.println("SSID: " + newSsid);
-  Serial.println("PASS: " + newPass);
+  // Serial.println("📡 Recebido novo WiFi:");
+  // Serial.println("SSID: " + newSsid);
+  // Serial.println("PASS: " + newPass);
 
   // Salva nas Preferences
   prefs.begin("wifi", false);
-  prefs.putString("ssid", newSsid);
-  prefs.putString("password", newPass);
+  prefs.putString("ssid", "Pedro");
+  prefs.putString("password", "teste123");
   prefs.end();
 
   server.send(200, "application/json", "{\"success\":true}");
@@ -288,7 +288,7 @@ void setup() {
   server.on("/", HTTP_GET, handleRoot);
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/reset_wifi", HTTP_POST, handleResetWifi);
-  server.on("/config_wifi", HTTP_POST, handleConfigWifi);
+  server.on("/config_wifi", HTTP_GET, handleConfigWifi);
   server.begin();
   Serial.println("🌐 HTTP server iniciado");
 }
