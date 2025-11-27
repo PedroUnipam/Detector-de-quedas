@@ -2,7 +2,8 @@ import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://fall-detector-api.vercel.app",
+  baseURL:
+    process.env.EXPO_PUBLIC_API_URL ?? "https://fall-detector-api.vercel.app",
 });
 
 export function useRegister() {

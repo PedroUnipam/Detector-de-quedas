@@ -18,9 +18,11 @@ import { auth } from "../../services/firebase";
 import { signOut } from "firebase/auth";
 
 import { useProfile } from "../../hooks/useProfile";
+import { useAuth } from "../../contexts/auth";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
 
   const { profile: userProfile, loading, error } = useProfile();
 
@@ -48,7 +50,7 @@ export default function SettingsScreen() {
     try {
       console.log("Iniciando logout...");
 
-      await signOut(auth);
+      await logout();
       console.log("Firebase signOut concluído");
 
       try {

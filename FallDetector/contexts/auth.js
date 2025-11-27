@@ -64,8 +64,8 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     await auth.signOut();
 
-    await AsyncStorage.removeItem("email", email);
-    await AsyncStorage.removeItem("password", password);
+    await AsyncStorage.removeItem("email");
+    await AsyncStorage.removeItem("password");
   };
 
   const onInitApp = async () => {
