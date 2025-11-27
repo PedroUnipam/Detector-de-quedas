@@ -1,7 +1,7 @@
 // app/(auth)/login.js
 console.log("🔥 VERSÃO NOVA DO CÓDIGO CARREGOU 🔥");
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { useAuth } from "../../contexts/auth";
 
 export default function Login() {
   const router = useRouter();
-  const { login, user } = useAuth();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
