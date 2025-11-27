@@ -162,7 +162,8 @@ export default function HistoryScreen() {
                 >
                   <View key={j} style={styles.card}>
                     <Text style={styles.time}>
-                      {formatTimestamp(localDate)}
+                      {formatTimestamp(localDate)}{" "}
+                      {isCuidador ? ` - ${event.patient.name}` : ""}
                     </Text>
                     <Text style={styles.intensity}>
                       {classifyFallEmoji(event.type)}
