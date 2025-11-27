@@ -301,11 +301,6 @@ export default function HomeScreen() {
       {/* Cabeçalho / Usuário */}
       <View style={styles.header}>
         <Text style={styles.title}>Olá, {userProfile?.name || "Usuário"}!</Text>
-        <Text style={styles.subtitle}>
-          {totalHoje === 0
-            ? "Nenhuma queda registrada hoje."
-            : `Foram registradas ${totalHoje} queda(s) hoje.`}
-        </Text>
       </View>
 
       {/* Comandos Rápidos - APENAS PARA PACIENTES */}
