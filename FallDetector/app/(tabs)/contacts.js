@@ -15,6 +15,7 @@ import { utils } from "../../services/api";
 import { useRegister } from "../../hooks/useRegister";
 import { useLinkToCaregiver } from "../../hooks/useLinkToCaregiver";
 import { useCaregivers } from "../../hooks/useCaregivers";
+import { useUnlinkToCaregiver } from "../../hooks/useUnlinkToCaregiver";
 
 const formatPhone = (text) => {
   const numbers = text.replace(/\D/g, "");
@@ -52,6 +53,8 @@ export default function ContactsScreen() {
   const { mutateAsync: register, isPending } = useRegister();
   const { linkToCaregiver, loading: linkingCaregiver } = useLinkToCaregiver();
   const { caregivers, refetchCaregivers, loading } = useCaregivers();
+  const { unlinkToCaregiver, loading: unlinkingCaregiver } =
+    useUnlinkToCaregiver();
 
   const onRefresh = useCallback(async () => {
     await refetchCaregivers();
@@ -71,7 +74,7 @@ export default function ContactsScreen() {
     console.log({ contact });
     Alert.alert(
       "Remover Contato",
-      `Deseja realmente remover ${contact.nome}?`,
+      `Deseja realmente remover ${contact.name}?`,
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -79,7 +82,7 @@ export default function ContactsScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await linkToCaregiver(contact.id);
+              await unlinkToCaregiver(contact.id);
               await refetchCaregivers();
             } catch (err) {
               Alert.alert("Erro", utils.formatError(err));

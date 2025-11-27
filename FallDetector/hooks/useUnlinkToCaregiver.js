@@ -5,26 +5,24 @@ import { useState, useCallback } from "react";
  * Hook to fetch user profile data
  * @typedef {Object} UseUnlinkToCaregiverReturn
  * @property {boolean} loading
- * @property {Error} error
- * @property {(caregiverId: string) => Promise<void>} linkToCaregiver
+ * @property {(caregiverId: string) => Promise<void>} unlinkToCaregiver
  * @returns {UseUnlinkToCaregiverReturn}
  */
 export function useUnlinkToCaregiver() {
   const api = useApi();
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState();
 
-  const linkToCaregiver = useCallback(
+  const unlinkToCaregiver = useCallback(
     async (caregiverId) => {
       try {
         setLoading(true);
 
         await api.delete("patient-caregivers", {
-          caregiverId,
+          data: {
+            caregiverId,
+          },
         });
-      } catch (err) {
-        setError(err);
       } finally {
         setLoading(false);
       }
@@ -32,5 +30,5 @@ export function useUnlinkToCaregiver() {
     [api],
   );
 
-  return { loading, error, linkToCaregiver };
+  return { loading, unlinkToCaregiver };
 }
