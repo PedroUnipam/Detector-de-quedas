@@ -3,16 +3,41 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
-import { useProfile } from "../../hooks/useProfile";
 import { useAuth } from "../../contexts/auth";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
+import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
+import { useSetNotificationToken } from "../../hooks/useSetNotificationToken";
 
 export default function TabLayout() {
   const { user: fbUser } = useAuth();
+  const { setNotificationToken } = useSetNotificationToken();
 
   useEffect(() => {
     if (!fbUser) router.replace("/login");
+
+    (async function () {
+      try {
+        const projectId =
+          Constants?.expoConfig?.extra?.eas?.projectId ??
+          Constants?.easConfig?.projectId;
+        if (!projectId) {
+          throw new Error("Project ID not found");
+        }
+        const token = (
+          await Notifications.getExpoPushTokenAsync({
+            projectId,
+          })
+        ).data;
+
+        console.log(token);
+
+        await setNotificationToken(token);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
   }, []);
 
   // const { data: user, isPending, isLoading } = useProfile();

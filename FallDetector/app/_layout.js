@@ -19,7 +19,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
-    shouldPlaySound: false, // som longo será manual via expo-av
+    shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
@@ -55,7 +55,6 @@ async function configureNotifications() {
         lightColor: "#FF231F7C",
       });
     }
-
     console.log("📌 Notificações configuradas");
   } catch (error) {
     console.error("Erro ao configurar notificações:", error);
