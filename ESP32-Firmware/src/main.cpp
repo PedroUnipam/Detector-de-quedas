@@ -132,7 +132,15 @@ void enviarQuedaFirestore(float ax, float ay, float az, float mag, int fallLevel
 // ===========================
 // HTTP HANDLERS
 // ===========================
+//
+void handleCors() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 void handleRoot() {
+  handleCors()
   String msg;
   if (modoConfig) {
     msg = "ESP32 em modo CONFIG. Envie POST /config_wifi com {ssid,password}.";
@@ -143,6 +151,7 @@ void handleRoot() {
 }
 
 void handleStatus() {
+  handleCors()
   String msg = "OK";
   if (WiFi.status() == WL_CONNECTED) {
     msg += " | IP: " + WiFi.localIP().toString();
@@ -154,6 +163,7 @@ void handleStatus() {
 }
 
 void handleResetWifi() {
+  handleCors()
   // Apaga dados salvos e reinicia em modo AP
   prefs.begin("wifi", false);
   prefs.clear();
@@ -166,6 +176,7 @@ void handleResetWifi() {
 
 // RECEBE JSON { "ssid": "...", "password": "..." }
 void handleConfigWifi() {
+  handleCors()
   if (!server.hasArg("plain")) {
     server.send(400, "text/plain", "JSON obrigatório");
     return;
