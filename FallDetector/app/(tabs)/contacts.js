@@ -11,82 +11,51 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { userAPI, utils } from "../../services/api";
-import { findPessoaByEmail } from "../../services/firestorePessoas";
-import { auth } from "../../services/firebase";
-import {
-  getCuidadorByEmail,
-  vincularCuidadorAUsuario,
-} from "../../services/firestoreVinculos";
-import { useProfile } from "../../hooks/useProfile";
+import { useRegister } from "../../hooks/useRegister";
+import { useLinkToCaregiver } from "../../hooks/useLinkToCaregiver";
+
+const formatPhone = (text) => {
+  const numbers = text.replace(/\D/g, "");
+  if (numbers.length <= 2) return numbers;
+  if (numbers.length <= 7)
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+  return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+};
+
+const maskCPF = (v) => {
+  return v
+    .replace(/\D/g, "")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
 
 export default function ContactsScreen() {
   const [contacts, setContacts] = useState([]);
-  const [tiposCuidador, setTiposCuidador] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [nightMode, setNightMode] = useState(false);
 
-  const {
-    profile: userProfile,
-    loading: isLoading,
-    error: profileError,
-  } = useProfile();
+  const nightMode = false;
 
   const [formData, setFormData] = useState({
     id: null,
     nome: "",
     telefone: "",
-    parentesco: "",
-    id_tipocuidador: null,
     email: "",
+    password: "",
+    cpf: "",
   });
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+
+  const { mutateAsync: register, isPending } = useRegister();
+  const { linkToCaregiver, loading: linkingCaregiver } = useLinkToCaregiver();
 
   useEffect(() => {
     loadContacts();
-    loadTiposCuidador();
-    loadNightMode();
   }, []);
-
-  const loadNightMode = async () => {
-    try {
-      const prefs = await AsyncStorage.getItem("userPreferences");
-      if (prefs) {
-        const { nightMode: night } = JSON.parse(prefs);
-        setNightMode(night ?? false);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar modo noturno:", error);
-    }
-  };
-
-  const loadTiposCuidador = async () => {
-    try {
-      const response = await userAPI.getTiposCuidador();
-      if (response.success && response.tipos) {
-        setTiposCuidador(response.tipos);
-      } else {
-        useFallbackTipos();
-      }
-    } catch {
-      useFallbackTipos();
-    }
-  };
-
-  const useFallbackTipos = () => {
-    const tiposFallback = [
-      { id_tipocuidador: 1, descricao: "Familiar" },
-      { id_tipocuidador: 2, descricao: "Enfermeiro" },
-      { id_tipocuidador: 3, descricao: "Cuidador Profissional" },
-      { id_tipocuidador: 4, descricao: "Médico" },
-      { id_tipocuidador: 5, descricao: "Fisioterapeuta" },
-    ];
-    setTiposCuidador(tiposFallback);
-  };
 
   const loadContacts = async () => {
     try {
@@ -106,224 +75,14 @@ export default function ContactsScreen() {
     setRefreshing(false);
   }, []);
 
-  const formatPhone = (text) => {
-    const numbers = text.replace(/\D/g, "");
-    if (numbers.length <= 2) return numbers;
-    if (numbers.length <= 7)
-      return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
-    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
-  };
-
   const handleOpenAddModal = () => {
-    setEditMode(false);
     setFormData({
       id: null,
       nome: "",
       telefone: "",
-      parentesco: "",
-      id_tipocuidador: tiposCuidador[0]?.id_tipocuidador,
       email: "",
     });
     setModalVisible(true);
-  };
-
-  const handleOpenEditModal = (contact) => {
-    const tipoEncontrado = tiposCuidador.find(
-      (t) => t.descricao.toLowerCase() === contact.parentesco?.toLowerCase(),
-    );
-    setEditMode(true);
-    setFormData({
-      id: contact.id,
-      nome: contact.nome,
-      telefone: contact.telefone,
-      parentesco: contact.parentesco,
-      id_tipocuidador: tipoEncontrado?.id_tipocuidador,
-      email: contact.email,
-    });
-    setModalVisible(true);
-  };
-
-  const handleSelectTipo = (tipo) => {
-    setFormData({
-      ...formData,
-      id_tipocuidador: tipo.id_tipocuidador,
-      parentesco: tipo.descricao,
-    });
-    setPickerVisible(false);
-  };
-
-  // ==========================================
-  //  🔗 VINCULAR CUIDADOR (FUNÇÃO SEPARADA)
-  // ==========================================
-  const handleVincularCuidador = async () => {
-    if (!formData.email?.trim()) {
-      Alert.alert("Atenção", "Por favor, preencha o e-mail do cuidador");
-      return;
-    }
-
-    try {
-      console.log(
-        "🔗 Tentando vincular cuidador com email:",
-        formData.email.trim(),
-      );
-
-      // 1. Verificar se o email é de um cuidador
-      const result = await getCuidadorByEmail(formData.email.trim());
-
-      if (!result.success) {
-        Alert.alert(
-          "Erro",
-          result.message || "Este email não pertence a um cuidador cadastrado.",
-        );
-        return;
-      }
-
-      console.log("✅ Cuidador encontrado:", result.cuidador);
-
-      // 2. Vincular o cuidador ao usuário atual
-      const usuarioAtual = auth.currentUser;
-      if (!usuarioAtual) {
-        Alert.alert("Erro", "Você precisa estar logado.");
-        return;
-      }
-
-      console.log(
-        "🔗 Vinculando cuidador",
-        result.cuidador.uid,
-        "ao paciente",
-        usuarioAtual.uid,
-      );
-
-      const vinculoResult = await vincularCuidadorAUsuario(
-        usuarioAtual.uid,
-        result.cuidador.uid,
-      );
-
-      if (vinculoResult.success) {
-        Alert.alert(
-          "Sucesso! 🎉",
-          `O cuidador ${result.cuidador.nome} foi vinculado à sua conta!\n\nEle agora poderá visualizar suas quedas e localização.`,
-        );
-
-        // Preencher nome automaticamente se estava vazio
-        if (!formData.nome?.trim()) {
-          setFormData((prev) => ({
-            ...prev,
-            nome: result.cuidador.nome,
-          }));
-        }
-      } else {
-        Alert.alert(
-          "Erro",
-          vinculoResult.error || "Não foi possível vincular o cuidador.",
-        );
-      }
-    } catch (error) {
-      console.error("❌ Erro ao vincular cuidador:", error);
-      Alert.alert(
-        "Erro",
-        "Falha ao vincular cuidador: " + (error.message || "Erro desconhecido"),
-      );
-    }
-  };
-
-  // ==========================================
-  //  🔍 VALIDAÇÃO DE EMAIL
-  // ==========================================
-  const validateEmailInFirestore = async () => {
-    if (!formData.email?.trim()) return true;
-
-    const email = formData.email.trim();
-
-    try {
-      const result = await findPessoaByEmail(email);
-
-      if (!result.ok) {
-        if (result.reason === "not_found") {
-          Alert.alert(
-            "E-mail não encontrado",
-            "Nenhum usuário registrado com este e-mail.",
-          );
-        } else if (result.reason === "inactive") {
-          Alert.alert(
-            "Usuário inativo",
-            "Este usuário existe, mas não está ativo.",
-          );
-        } else {
-          Alert.alert("Erro", "Falha ao validar o e-mail.");
-        }
-        return false;
-      }
-
-      // Se usuário existe, usa nome real caso campo nome esteja vazio
-      if (!formData.nome?.trim() && result.user?.nome) {
-        setFormData((prev) => ({
-          ...prev,
-          nome: result.user.nome,
-        }));
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Erro ao validar email:", error);
-      // Se der erro na validação, não bloqueia o salvamento
-      return true;
-    }
-  };
-
-  // ==========================================
-  //  💾 SALVAR CONTATO
-  // ==========================================
-  const handleSaveContact = async () => {
-    if (!formData.nome?.trim()) {
-      Alert.alert("Atenção", "Por favor, preencha o nome");
-      return;
-    }
-    if (!formData.telefone?.trim()) {
-      Alert.alert("Atenção", "Por favor, preencha o telefone");
-      return;
-    }
-
-    // 🔍 Valida email no Firestore (se a função existir)
-    if (typeof findPessoaByEmail === "function") {
-      const emailIsValid = await validateEmailInFirestore();
-      if (!emailIsValid) return;
-    }
-
-    const tipoSelecionado = tiposCuidador.find(
-      (tipo) => tipo.id_tipocuidador === formData.id_tipocuidador,
-    );
-
-    const dataToSend = {
-      nome: formData.nome.trim(),
-      telefone: formData.telefone.trim(),
-      parentesco: tipoSelecionado?.descricao || formData.parentesco,
-      id_tipocuidador: formData.id_tipocuidador,
-      email: formData.email?.trim() || null,
-    };
-
-    try {
-      let response;
-      if (editMode) {
-        response = await userAPI.updateCuidador(formData.id, dataToSend);
-      } else {
-        response = await userAPI.addCuidador(dataToSend);
-      }
-
-      if (response.success) {
-        Alert.alert(
-          "Sucesso",
-          editMode ? "Contato atualizado!" : "Contato adicionado!",
-        );
-        setModalVisible(false);
-        await loadContacts();
-      } else {
-        Alert.alert("Erro", response.message || "Erro ao salvar contato");
-      }
-    } catch (error) {
-      console.error("Erro ao salvar contato:", error);
-      Alert.alert("Erro", utils.formatError(error));
-    }
   };
 
   const handleRemoveContact = (contact) => {
@@ -349,14 +108,35 @@ export default function ContactsScreen() {
     );
   };
 
-  const getSelectedTipoLabel = () => {
-    const tipo = tiposCuidador.find(
-      (t) => t.id_tipocuidador === formData.id_tipocuidador,
-    );
-    return tipo?.descricao || "Selecione o tipo";
-  };
-
   const styles = getStyles(nightMode);
+
+  // const handleVincularCuidador = () => { };
+  const handleSaveContact = async () => {
+    try {
+      const { data: caregiver } = await register({
+        email: formData.email,
+        password: formData.password,
+        cpf: formData.cpf,
+        cellphone: formData.telefone,
+        name: formData.nome,
+      });
+      console.log({ caregiver });
+
+      await linkToCaregiver(caregiver.id);
+
+      setModalVisible(false);
+      setFormData({
+        id: null,
+        nome: "",
+        telefone: "",
+        email: "",
+        password: "",
+        cpf: "",
+      });
+    } catch (err) {
+      Alert.alert("Erro", utils.formatError(err));
+    }
+  };
 
   if (loading) {
     return (
@@ -399,10 +179,6 @@ export default function ContactsScreen() {
           </View>
 
           <View style={styles.actionButtons}>
-            <TouchableOpacity onPress={() => handleOpenEditModal(contact)}>
-              <Text style={styles.editButtonText}>✏️</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity onPress={() => handleRemoveContact(contact)}>
               <Text style={styles.removeButtonText}>🗑️</Text>
             </TouchableOpacity>
@@ -414,9 +190,32 @@ export default function ContactsScreen() {
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editMode ? "Editar Contato" : "Novo Contato"}
+            <Text style={styles.modalTitle}>Novo Contato</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="E-mail"
+              value={formData.email}
+              onChangeText={(v) => setFormData({ ...formData, email: v })}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            {/* <View style={styles.emailContainer}>
+
+              <TouchableOpacity
+                style={styles.vinculateButton}
+                onPress={handleVincularCuidador}
+              >
+                <Text style={styles.vinculateButtonText}>🔍</Text>
+              </TouchableOpacity>
+            </View> 
+            <Text style={styles.vinculateHint}>
+              💡 Se este email for de um cuidador cadastrado, clique acima para
+              vinculá-lo. Assim ele poderá acompanhar suas quedas e localização.
             </Text>
+
+            */}
 
             <TextInput
               style={styles.input}
@@ -435,37 +234,35 @@ export default function ContactsScreen() {
               }
             />
 
-            <TouchableOpacity
-              style={styles.customPicker}
-              onPress={() => setPickerVisible(true)}
-            >
-              <Text>{getSelectedTipoLabel()}</Text>
-              <Text>▼</Text>
-            </TouchableOpacity>
-
             <TextInput
               style={styles.input}
-              placeholder="E-mail (opcional)"
-              value={formData.email}
-              onChangeText={(v) => setFormData({ ...formData, email: v })}
-              keyboardType="email-address"
-              autoCapitalize="none"
+              placeholder="CPF"
+              keyboardType="phone-pad"
+              value={formData.cpf}
+              onChangeText={(v) =>
+                setFormData({ ...formData, cpf: maskCPF(v) })
+              }
             />
 
-            {/* BOTÃO DE VINCULAR CUIDADOR */}
-            <TouchableOpacity
-              style={styles.vinculateButton}
-              onPress={handleVincularCuidador}
-            >
-              <Text style={styles.vinculateButtonText}>
-                🔗 Vincular como Cuidador
-              </Text>
-            </TouchableOpacity>
-
-            <Text style={styles.vinculateHint}>
-              💡 Se este email for de um cuidador cadastrado, clique acima para
-              vinculá-lo. Assim ele poderá acompanhar suas quedas e localização.
-            </Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                value={formData.password}
+                onChangeText={(v) => {
+                  setFormData({ ...formData, password: v });
+                }}
+                placeholder="Digite a senha"
+                secureTextEntry={!showCurrentPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                style={styles.eyeButton}
+              >
+                <Text style={styles.eyeIcon}>
+                  {showCurrentPassword ? "👁️" : "👁️‍🗨️"}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -478,54 +275,21 @@ export default function ContactsScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={handleSaveContact}
+                disabled={linkingCaregiver || isPending}
               >
                 <Text style={styles.saveButtonText}>
-                  {editMode ? "Atualizar" : "Salvar"}
+                  {linkingCaregiver || isPending ? "Salvando" : "Salvar"}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-
-      {/* MODAL PICKER */}
-      <Modal visible={pickerVisible} transparent animationType="fade">
-        <TouchableOpacity
-          style={styles.pickerModalOverlay}
-          onPress={() => setPickerVisible(false)}
-        >
-          <View style={styles.pickerModalContent}>
-            <Text style={styles.pickerModalTitle}>Selecione o tipo</Text>
-
-            <ScrollView>
-              {tiposCuidador.map((t) => (
-                <TouchableOpacity
-                  key={t.id_tipocuidador}
-                  style={styles.pickerItem}
-                  onPress={() => handleSelectTipo(t)}
-                >
-                  <Text>{t.descricao}</Text>
-                  {formData.id_tipocuidador === t.id_tipocuidador && (
-                    <Text>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.pickerCloseButton}
-              onPress={() => setPickerVisible(false)}
-            >
-              <Text style={styles.pickerCloseButtonText}>Fechar</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </ScrollView>
   );
 }
 
-const getStyles = (nightMode) =>
+const getStyles = (nightMode = false) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: nightMode ? "#1a1a1a" : "#f5f5f5" },
     centerContainer: {
@@ -638,12 +402,19 @@ const getStyles = (nightMode) =>
       justifyContent: "space-between",
       alignItems: "center",
     },
+    emailContainer: {
+      flex: 1,
+      flexDirection: "row",
+      width: "100%",
+      alignSelf: "stretch",
+    },
     vinculateButton: {
       backgroundColor: "#28a745",
       padding: 14,
       borderRadius: 8,
       marginVertical: 10,
       alignItems: "center",
+      width: "18px",
     },
     vinculateButtonText: {
       color: "#fff",
@@ -721,5 +492,31 @@ const getStyles = (nightMode) =>
       color: "#fff",
       textAlign: "center",
       fontWeight: "600",
+    },
+    passwordContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: nightMode ? "#1a1a1a" : "#f1f1f1",
+      borderColor: nightMode ? "#444" : "#ddd",
+      borderRadius: 8,
+      marginBottom: 10,
+    },
+    passwordInput: {
+      flex: 1,
+      padding: 12,
+      fontSize: 16,
+      color: nightMode ? "#fff" : "#333",
+      backgroundColor: nightMode ? "#1a1a1a" : "#f1f1f1",
+      color: nightMode ? "#fff" : "#333",
+      padding: 12,
+      borderRadius: 8,
+      marginVertical: 8,
+      fontSize: 16,
+    },
+    eyeButton: {
+      padding: 12,
+    },
+    eyeIcon: {
+      fontSize: 20,
     },
   });
