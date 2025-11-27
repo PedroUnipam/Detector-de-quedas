@@ -9,16 +9,10 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { auth, db } from "../../services/firebase";
-import {
-  doc,
-  setDoc,
-  getDocs,
-  deleteDoc,
-  collection,
-} from "firebase/firestore";
 
 import { useProfile } from "../../hooks/useProfile";
+import { useSaveDevice } from "../../hooks/useSaveDevice";
+import { useRemoveDevice } from "../../hooks/useRemoveDevice";
 
 export default function DeviceScreen() {
   // ==========================
@@ -34,10 +28,11 @@ export default function DeviceScreen() {
   const [configuringWifi, setConfiguringWifi] = useState(false);
   const [resettingWifi, setResettingWifi] = useState(false);
 
-  const { profile, loading: loadingProfile } = useProfile();
+  const { profile, loading: loadingProfile, refetchProfile } = useProfile();
+  const { loading: isSavingDevice, saveDevice } = useSaveDevice();
+  const { loading: isRemovingDevice, removeDevice } = useRemoveDevice();
 
-  const loading = loadingProfile;
-  const savingDevice = false;
+  const loading = loadingProfile || isSavingDevice || isRemovingDevice;
 
   console.log(profile);
 
@@ -178,38 +173,29 @@ export default function DeviceScreen() {
   // ==========================
   // REGISTRAR DISPOSITIVO NO FIRESTORE
   // ==========================
-  const registrarDispositivo = async () => { }; // TODO;
+  const registrarDispositivo = async () => {
+    try {
+      await saveDevice(deviceId);
+      refetchProfile();
+
+      Alert.alert("Sucesso", "O device foi linkado com a sua conta.");
+    } catch (err) {
+      Alert.alert("Error ao linkar device", JSON.stringify(err));
+    }
+  };
 
   // ==========================
   // REMOVER DISPOSITIVO DO FIRESTORE
   // ==========================
-  const removerDispositivo = (id) => {
-    Alert.alert("Confirmar", "Deseja realmente remover este dispositivo?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Remover",
-        style: "destructive",
-        onPress: async () => {
-          const uid = getUid();
-          if (!uid) return;
+  const removerDispositivo = async () => {
+    try {
+      await removeDevice(deviceId);
+      refetchProfile();
 
-          try {
-            setRemovingDeviceId(id);
-            const ref = doc(db, "usuarios", uid, "dispositivos", id);
-            await deleteDoc(ref);
-            carregarDispositivos();
-          } catch (error) {
-            console.error("Erro ao remover dispositivo:", error);
-            Alert.alert(
-              "Erro",
-              error.message || "Não foi possível remover o dispositivo.",
-            );
-          } finally {
-            setRemovingDeviceId(null);
-          }
-        },
-      },
-    ]);
+      Alert.alert("Sucesso", "O device foi removido da sua conta.");
+    } catch (err) {
+      Alert.alert("Error ao remover device", JSON.stringify(err));
+    }
   };
 
   // ==========================
@@ -315,23 +301,26 @@ export default function DeviceScreen() {
         autoCapitalize="none"
       />
 
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: "#4caf50" }]}
-        onPress={registrarDispositivo}
-        disabled={savingDevice}
-      >
-        {savingDevice ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Salvar Dispositivo</Text>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.divider} />
+      {!device && (
+        <>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: "#4caf50" }]}
+            onPress={registrarDispositivo}
+            disabled={isSavingDevice}
+          >
+            {isSavingDevice ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Salvar Dispositivo</Text>
+            )}
+          </TouchableOpacity>
+          <View style={styles.divider} />)
+        </>
+      )}
 
       <Text style={styles.title}>Meu Dispositivo</Text>
 
-      {loadingProfile ? (
+      {loading ? (
         <ActivityIndicator size="large" color="#000" />
       ) : !device ? (
         <Text style={{ marginTop: 10 }}>Nenhum dispositivo registrado.</Text>
@@ -343,7 +332,7 @@ export default function DeviceScreen() {
               styles.button,
               { marginTop: 10, backgroundColor: "#e11d48" },
             ]}
-            onPress={() => removerDispositivo(dev.id)}
+            onPress={() => removerDispositivo()}
             disabled={removingDeviceId === device}
           >
             {removingDeviceId === device ? (
