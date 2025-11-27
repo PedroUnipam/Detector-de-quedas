@@ -169,6 +169,7 @@ export default function HomeScreen() {
         userData={userProfile}
         totalHoje={totalHoje}
         totalSemana={totalHoje}
+        isLoadingEvents={isLoadingEvents}
         refetchEvents={refetchEvents}
       />
     );

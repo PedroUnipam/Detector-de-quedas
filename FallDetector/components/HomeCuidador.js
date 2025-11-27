@@ -101,12 +101,7 @@ export default function HomeCuidador({
       <View style={styles.header}>
         <Text style={styles.title}>👨‍⚕️ Painel do Cuidador</Text>
         <Text style={styles.subtitle}>
-          Olá, {userData?.nome || "Cuidador"}!
-        </Text>
-        <Text style={styles.description}>
-          {patients.length === 0
-            ? "Nenhum paciente vinculado ainda."
-            : `Você está monitorando ${patients.length} paciente(s).`}
+          Olá, {userData?.name || "Cuidador"}!
         </Text>
       </View>
 

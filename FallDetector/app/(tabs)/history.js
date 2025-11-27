@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -9,9 +9,8 @@ import {
   View,
 } from "react-native";
 
-import { getQuedasFromFirestore } from "../../services/firestoreQuedas";
-
 import { useEvents } from "../../hooks/useEvents";
+import { useProfile } from "../../hooks/useProfile";
 
 // ============================================================
 // Funções auxiliares (SEM NOTIFICAÇÕES)
@@ -105,13 +104,15 @@ const organizeEventsByDate = (events) => {
 // ============================================================
 
 export default function HistoryScreen() {
-  const { events, loading, refetchEvents } = useEvents();
+  const [expanded, setExpanded] = useState([]);
+  const { events, loading: loadingEvents, refetchEvents } = useEvents();
+
+  const { profile, loading: loadingProfile } = useProfile();
+
+  const loading = loadingEvents || loadingProfile;
+  const isCuidador = profile && !profile.patient;
 
   const formattedHistory = organizeEventsByDate(events);
-
-  // ----------------------------------------------------------
-  // UI
-  // ----------------------------------------------------------
 
   if (loading) {
     return (
@@ -121,6 +122,12 @@ export default function HistoryScreen() {
       </View>
     );
   }
+
+  const toggleExpanded = (id) => {
+    setExpanded((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+    );
+  };
 
   return (
     <ScrollView
@@ -144,17 +151,37 @@ export default function HistoryScreen() {
 
           {day.events.map((event, j) => {
             const localDate = new Date(event.date);
+            const isExpanded = expanded.includes(event.id);
+            const { patientInfo: pi } = event.patient;
 
             return (
-              <View key={j} style={styles.card}>
-                <Text style={styles.time}>{formatTimestamp(localDate)}</Text>
-                <Text style={styles.intensity}>
-                  {classifyFallEmoji(event.type)}
-                </Text>
-                <Text style={styles.smallInfo}>
-                  Período: {classifyHora(localDate)}
-                </Text>
-              </View>
+              <>
+                <TouchableOpacity
+                  disabled={!isCuidador}
+                  onPress={() => toggleExpanded(event.id)}
+                >
+                  <View key={j} style={styles.card}>
+                    <Text style={styles.time}>
+                      {formatTimestamp(localDate)}
+                    </Text>
+                    <Text style={styles.intensity}>
+                      {classifyFallEmoji(event.type)}
+                    </Text>
+                    <Text style={styles.smallInfo}>
+                      Período: {classifyHora(localDate)}
+                    </Text>
+
+                    {isExpanded && (
+                      <View style={styles.expandedBox}>
+                        <Text style={styles.expandedLabel}>Endereço</Text>
+                        <Text>Rua: {pi.street}</Text>
+                        <Text>Bairro: {pi.state}</Text>
+                        <Text>Cidade: {pi.city}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </>
             );
           })}
         </View>
@@ -205,12 +232,8 @@ const styles = StyleSheet.create({
   expandBtn: { marginTop: 6, paddingVertical: 5 },
   expandText: { color: "#007AFF", fontWeight: "600" },
 
-  expandedBox: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: "#ddd",
-  },
+  expandedBox: {},
 
   label: { marginTop: 10, fontWeight: "600" },
+  expandedLabel: { fontWeight: 600 },
 });
