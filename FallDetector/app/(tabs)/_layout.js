@@ -4,11 +4,11 @@ import { Redirect, Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../../contexts/auth";
-import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { useSetNotificationToken } from "../../hooks/useSetNotificationToken";
+import { useProfile } from "../../hooks/useProfile";
 
 export default function TabLayout() {
   const { user: fbUser } = useAuth();
@@ -38,13 +38,11 @@ export default function TabLayout() {
     })();
   }, []);
 
-  // const { data: user, isPending, isLoading } = useProfile();
+  const { profile: user, isPending, isLoading } = useProfile();
 
   if (!fbUser) return <Redirect href="/login" />;
 
-  const isCuidador = false;
-  const isLoading = false;
-  const isPending = false;
+  const isCuidador = user && !user.patient;
 
   if (isLoading || isPending) {
     console.log("⏳ Tabs Layout: Carregando tipo de usuário...");
@@ -72,6 +70,8 @@ export default function TabLayout() {
   console.log(
     `📊 href da aba Contatos: ${isCuidador ? "null (OCULTA)" : "/contacts (VISÍVEL)"}`,
   );
+
+  console.log({ user, isCuidador });
 
   return (
     <Tabs
@@ -118,6 +118,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="watch" size={size} color={color} />
           ),
+          href: isCuidador ? null : "/device",
         }}
       />
 

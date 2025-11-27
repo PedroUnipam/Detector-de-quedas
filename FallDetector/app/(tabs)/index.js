@@ -45,7 +45,12 @@ export default function HomeScreen() {
     error: profileError,
   } = useProfile();
 
-  const { events, loading: isLoadingEvents, error: eventsError } = useEvents();
+  const {
+    events,
+    loading: isLoadingEvents,
+    error: eventsError,
+    refetchEvents,
+  } = useEvents();
 
   const loading = isLoadingProfile || isLoadingEvents;
   const error = profileError ?? eventsError;
@@ -159,7 +164,14 @@ export default function HomeScreen() {
 
   if (isCuidador) {
     console.log("✅ 👨‍⚕️ Renderizando TELA DE CUIDADOR");
-    return <HomeCuidador userData={userProfile} />;
+    return (
+      <HomeCuidador
+        userData={userProfile}
+        totalHoje={totalHoje}
+        totalSemana={totalHoje}
+        refetchEvents={refetchEvents}
+      />
+    );
   }
 
   return (
