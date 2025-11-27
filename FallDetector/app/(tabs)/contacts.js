@@ -147,7 +147,7 @@ export default function ContactsScreen() {
     >
       <View style={styles.header}>
         <Text style={styles.title}>Contatos de Emergência</Text>
-        <Text style={styles.subtitle}>{contacts.length} cadastrados</Text>
+        <Text style={styles.subtitle}>{caregivers.length} cadastrado(s)</Text>
       </View>
 
       <TouchableOpacity style={styles.addButton} onPress={handleOpenAddModal}>

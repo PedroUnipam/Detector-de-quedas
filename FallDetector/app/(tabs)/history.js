@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from "react-native";
 
 import { getQuedasFromFirestore } from "../../services/firestoreQuedas";
+
+import { useEvents } from "../../hooks/useEvents";
 
 // ============================================================
 // Funções auxiliares (SEM NOTIFICAÇÕES)
@@ -35,18 +37,19 @@ const formatTimestamp = (date) => {
   }
 
   return `${String(local.getDate()).padStart(2, "0")}/${String(
-    local.getMonth() + 1
+    local.getMonth() + 1,
   ).padStart(2, "0")} às ${hora}:${min}`;
 };
 
-const classifyFallEmoji = (level) => {
+const classifyFallEmoji = (type) => {
   const map = {
-    0: "⚪ Normal",
-    1: "🟡 Movimento brusco",
-    2: "🟠 Impacto moderado",
-    3: "🔴 Queda forte",
+    fall_1: "🟡 Movimento brusco",
+    fall_2: "🟠 Impacto moderado",
+    fall_3: "🔴 Queda forte",
+    need_help: "🔴 Pedido de ajuda",
+    ok: "🟢 Estou bem",
   };
-  return map[level] || "⚪ Evento";
+  return map[type] || "⚪ Evento";
 };
 
 const classifyHora = (date) => {
@@ -57,83 +60,54 @@ const classifyHora = (date) => {
   return "Noite";
 };
 
+const isSameDay = (d1, d2) =>
+  d1.getDate() === d2.getDate() &&
+  d1.getMonth() === d2.getMonth() &&
+  d1.getFullYear() === d2.getFullYear();
+
+const formatDate = (d) =>
+  `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
+
+/**
+ * Organizes events by local date
+ * @param {Array} events - Array of events from the API
+ * @returns {Array} Array of objects with date label and events array
+ */
+const organizeEventsByDate = (events) => {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const groups = {};
+
+  events.forEach((event) => {
+    const localDate = new Date(event.date);
+    let label = formatDate(localDate);
+
+    if (isSameDay(localDate, today)) label = "Hoje";
+    else if (isSameDay(localDate, yesterday)) label = "Ontem";
+
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(event);
+  });
+
+  return Object.keys(groups).map((day) => ({
+    date: day,
+    events: groups[day],
+  }));
+};
+
 // ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
 
 export default function HistoryScreen() {
-  const [historyData, setHistoryData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { events, loading, refetchEvents } = useEvents();
 
-  const [expanded, setExpanded] = useState({});
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
-  const loadHistory = async () => {
-    try {
-      setLoading(true);
-
-      const quedas = await getQuedasFromFirestore();
-      const grouped = organizeByDate(quedas);
-      setHistoryData(grouped);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleExpand = (id) => {
-    setExpanded((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  // ----------------------------------------------------------
-  // Agrupamento por data
-  // ----------------------------------------------------------
-
-  const organizeByDate = (quedas) => {
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-
-    const groups = {};
-
-    quedas.forEach((item) => {
-      const date = new Date(item.date);
-      let label = formatDate(date);
-
-      if (isSameDay(date, today)) label = "Hoje";
-      else if (isSameDay(date, yesterday)) label = "Ontem";
-
-      if (!groups[label]) groups[label] = [];
-      groups[label].push(item);
-    });
-
-    return Object.keys(groups).map((day) => ({
-      date: day,
-      events: groups[day],
-    }));
-  };
-
-  const isSameDay = (d1, d2) =>
-    d1.getDate() === d2.getDate() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getFullYear() === d2.getFullYear();
-
-  const formatDate = (d) =>
-    `${String(d.getDate()).padStart(2, "0")}/${String(
-      d.getMonth() + 1
-    ).padStart(2, "0")}`;
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadHistory();
-    setRefreshing(false);
-  }, []);
+  const formattedHistory = organizeEventsByDate(events);
 
   // ----------------------------------------------------------
   // UI
@@ -151,53 +125,35 @@ export default function HistoryScreen() {
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={loading}
+          onRefresh={() => refetchEvents()}
+        />
+      }
     >
       <View style={styles.header}>
         <Text style={styles.title}>Histórico de Eventos</Text>
-        <Text style={styles.subtitle}>Detectados pelo dispositivo</Text>
       </View>
 
-      {historyData.map((day, i) => (
+      {/**<Text> {JSON.stringify(formattedHistory)}</Text> */}
+
+      {formattedHistory.map((day, i) => (
         <View key={i} style={styles.section}>
           <Text style={styles.sectionTitle}>{day.date}</Text>
 
           {day.events.map((event, j) => {
             const localDate = new Date(event.date);
-            const isExpanded = expanded[event.id];
 
             return (
               <View key={j} style={styles.card}>
                 <Text style={styles.time}>{formatTimestamp(localDate)}</Text>
-
-                <Text style={styles.intensity}>{classifyFallEmoji(event.fallLevel)}</Text>
-
-                <Text style={styles.smallInfo}>Período: {classifyHora(localDate)}</Text>
-
-                <TouchableOpacity
-                  onPress={() => toggleExpand(event.id)}
-                  style={styles.expandBtn}
-                >
-                  <Text style={styles.expandText}>
-                    {isExpanded ? "Ver menos ▲" : "Ver mais ▼"}
-                  </Text>
-                </TouchableOpacity>
-
-                {isExpanded && (
-                  <View style={styles.expandedBox}>
-                    <Text style={styles.label}>Aceleração:</Text>
-                    <Text>Mag: {event.accMag.toFixed(2)}</Text>
-                    <Text>X: {event.accX.toFixed(2)}</Text>
-                    <Text>Y: {event.accY.toFixed(2)}</Text>
-                    <Text>Z: {event.accZ.toFixed(2)}</Text>
-
-                    <Text style={styles.label}>Device ID:</Text>
-                    <Text>{event.deviceId}</Text>
-
-                    <Text style={styles.label}>Timestamp completo:</Text>
-                    <Text>{localDate.toString()}</Text>
-                  </View>
-                )}
+                <Text style={styles.intensity}>
+                  {classifyFallEmoji(event.type)}
+                </Text>
+                <Text style={styles.smallInfo}>
+                  Período: {classifyHora(localDate)}
+                </Text>
               </View>
             );
           })}
