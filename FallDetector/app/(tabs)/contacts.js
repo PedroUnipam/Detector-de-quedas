@@ -14,6 +14,7 @@ import {
 import { userAPI, utils } from "../../services/api";
 import { useRegister } from "../../hooks/useRegister";
 import { useLinkToCaregiver } from "../../hooks/useLinkToCaregiver";
+import { useCaregivers } from "../../hooks/useCaregivers";
 
 const formatPhone = (text) => {
   const numbers = text.replace(/\D/g, "");
@@ -33,8 +34,6 @@ const maskCPF = (v) => {
 
 export default function ContactsScreen() {
   const [contacts, setContacts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   const nightMode = false;
@@ -52,27 +51,10 @@ export default function ContactsScreen() {
 
   const { mutateAsync: register, isPending } = useRegister();
   const { linkToCaregiver, loading: linkingCaregiver } = useLinkToCaregiver();
-
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  const loadContacts = async () => {
-    try {
-      setLoading(true);
-      const response = await userAPI.getCuidadores();
-      setContacts(response.success ? response.cuidadores || [] : []);
-    } catch (error) {
-      Alert.alert("Erro", utils.formatError(error));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { caregivers, refetchCaregivers, loading } = useCaregivers();
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadContacts();
-    setRefreshing(false);
+    await refetchCaregivers();
   }, []);
 
   const handleOpenAddModal = () => {
@@ -133,6 +115,8 @@ export default function ContactsScreen() {
         password: "",
         cpf: "",
       });
+
+      await refetchCaregivers();
     } catch (err) {
       Alert.alert("Erro", utils.formatError(err));
     }
@@ -152,7 +136,7 @@ export default function ContactsScreen() {
       style={styles.container}
       refreshControl={
         <RefreshControl
-          refreshing={refreshing}
+          refreshing={loading}
           onRefresh={onRefresh}
           tintColor={nightMode ? "#fff" : "#007AFF"}
         />
@@ -167,15 +151,12 @@ export default function ContactsScreen() {
         <Text style={styles.addButtonText}>➕ Adicionar Contato</Text>
       </TouchableOpacity>
 
-      {contacts.map((contact) => (
+      {caregivers.map((contact) => (
         <View key={contact.id} style={styles.contactItem}>
           <View style={styles.contactInfo}>
-            <Text style={styles.contactName}>{contact.nome}</Text>
-            <Text style={styles.contactPhone}>{contact.telefone}</Text>
-            <Text style={styles.contactRelationship}>{contact.parentesco}</Text>
-            {contact.email && (
-              <Text style={styles.contactEmail}>📧 {contact.email}</Text>
-            )}
+            <Text style={styles.contactName}>{contact.name}</Text>
+            <Text style={styles.contactPhone}>{contact.cellphone}</Text>
+            <Text style={styles.contactEmail}>📧 {contact.email}</Text>
           </View>
 
           <View style={styles.actionButtons}>
