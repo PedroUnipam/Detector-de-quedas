@@ -3,12 +3,13 @@ import { useState, useCallback } from "react";
 
 /**
  * Hook to fetch user profile data
- * @typedef {Object} useProfileReturn
+ * @typedef {Object} UseUnlinkToCaregiverReturn
  * @property {boolean} loading
  * @property {Error} error
  * @property {(caregiverId: string) => Promise<void>} linkToCaregiver
+ * @returns {UseUnlinkToCaregiverReturn}
  */
-export function useLinkToCaregiver() {
+export function useUnlinkToCaregiver() {
   const api = useApi();
 
   const [loading, setLoading] = useState(false);
@@ -19,7 +20,9 @@ export function useLinkToCaregiver() {
       try {
         setLoading(true);
 
-        await api.post("patient-caregivers", { caregiverId });
+        await api.delete("patient-caregivers", {
+          caregiverId,
+        });
       } catch (err) {
         setError(err);
       } finally {

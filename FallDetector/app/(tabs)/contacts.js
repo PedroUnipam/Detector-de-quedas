@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import { userAPI, utils } from "../../services/api";
+import { utils } from "../../services/api";
 import { useRegister } from "../../hooks/useRegister";
 import { useLinkToCaregiver } from "../../hooks/useLinkToCaregiver";
 import { useCaregivers } from "../../hooks/useCaregivers";
@@ -68,6 +68,7 @@ export default function ContactsScreen() {
   };
 
   const handleRemoveContact = (contact) => {
+    console.log({ contact });
     Alert.alert(
       "Remover Contato",
       `Deseja realmente remover ${contact.nome}?`,
@@ -77,12 +78,11 @@ export default function ContactsScreen() {
           text: "Remover",
           style: "destructive",
           onPress: async () => {
-            const response = await userAPI.removeCuidador(contact.id);
-            if (response.success) {
-              Alert.alert("Sucesso", "Contato removido!");
-              loadContacts();
-            } else {
-              Alert.alert("Erro", response.message);
+            try {
+              await linkToCaregiver(contact.id);
+              await refetchCaregivers();
+            } catch (err) {
+              Alert.alert("Erro", utils.formatError(err));
             }
           },
         },
