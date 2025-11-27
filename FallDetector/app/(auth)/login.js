@@ -1,7 +1,7 @@
 // app/(auth)/login.js
 console.log("🔥 VERSÃO NOVA DO CÓDIGO CARREGOU 🔥");
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,16 +10,35 @@ import {
   Alert,
   StyleSheet,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { useAuth } from "../../contexts/auth";
 
 export default function Login() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, onInitApp } = useAuth();
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
+  const [autoLoggedIn, setAutoLoggedIn] = useState(false);
+
+  useEffect(() => {
+    (async function () {
+      try {
+        setLoading(true);
+        await onInitApp();
+        setAutoLoggedIn(true);
+      } catch (err) {
+        console.error("Erro ao tentar auto login", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (autoLoggedIn) {
+    return <Redirect href="/(tabs)" />;
+  }
 
   const handleLogin = async () => {
     if (!email || !senha) {

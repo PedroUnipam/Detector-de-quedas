@@ -9,6 +9,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * @property {string | null} token
  * @property {boolean} loading
  * @property {(email: string, password: string) => Promise<void>} login
+ * @property {() => Promise<void>}onInitApp
  * @property {() => Promise<void>} logout
  */
 
@@ -54,15 +55,35 @@ export function AuthProvider({ children }) {
    * @param {string} password
    */
   const login = async (email, password) => {
+    await AsyncStorage.setItem("email", email);
+    await AsyncStorage.setItem("password", password);
+
     await signInWithEmailAndPassword(auth, email, password);
   };
 
   const logout = async () => {
     await auth.signOut();
+
+    await AsyncStorage.removeItem("email", email);
+    await AsyncStorage.removeItem("password", password);
+  };
+
+  const onInitApp = async () => {
+    const email = await AsyncStorage.getItem("email");
+    const password = await AsyncStorage.getItem("password");
+
+    if (email && password) {
+      console.log({ email, password });
+      await login(email, password);
+    } else {
+      throw "aqui";
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, token }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, token, onInitApp }}
+    >
       {children}
     </AuthContext.Provider>
   );
