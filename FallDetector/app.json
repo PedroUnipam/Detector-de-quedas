@@ -8,12 +8,10 @@
     "scheme": "falldetector",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "updates": {
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/2880f5ae-7ae2-4edf-ba39-9d9e397c6425"
     },
-
     "android": {
       "package": "com.anonymous.FallDetector",
       "googleServicesFile": "./google-services.json",
@@ -26,10 +24,11 @@
       },
       "runtimeVersion": "1.0.0"
     },
-
     "plugins": [
       "expo-router",
       "expo-notifications",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
       [
         "expo-splash-screen",
         {
@@ -37,21 +36,23 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
-          "dark": { "backgroundColor": "#000000" }
+          "dark": {
+            "backgroundColor": "#000000"
+          }
         }
       ]
     ],
-
     "extra": {
       "eas": {
         "projectId": "2880f5ae-7ae2-4edf-ba39-9d9e397c6425"
       }
     },
-
     "owner": "thallysgmb",
-
     "ios": {
-      "runtimeVersion": { "policy": "appVersion" }
+      "runtimeVersion": {
+        "policy": "appVersion"
+      },
+      "bundleIdentifier": "com.anonymous.FallDetector"
     }
   }
 }

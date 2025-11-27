@@ -1,17 +1,26 @@
 // app/(auth)/cadastro.js
 
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  View,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { registerUser } from "../../services/authController.js";
+
+import { useRegister } from "../../hooks/useRegister";
+
+function convertDate(dateString) {
+  const parts = dateString.split("/");
+
+  const year = parts[2];
+  const month = parts[1];
+  const day = parts[0];
+
+  return `${year}-${month}-${day}`;
+}
 
 // Máscaras
 const maskCPF = (v) => {
@@ -37,9 +46,7 @@ const maskData = (v) => {
 };
 
 const maskCEP = (v) => {
-  return v
-    .replace(/\D/g, "")               
-    .replace(/(\d{5})(\d)/, "$1-$2");
+  return v.replace(/\D/g, "").replace(/(\d{5})(\d)/, "$1-$2");
 };
 
 export default function Cadastro() {
@@ -61,11 +68,21 @@ export default function Cadastro() {
   const [cidade, setCidade] = useState("");
   const [cep, setCEP] = useState("");
 
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState(undefined);
+
+  const {
+    mutateAsync: register,
+    isPending,
+    error: registerError,
+  } = useRegister();
+
+  const error = registerError ?? formError;
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer} style={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.scrollContainer}
+      style={styles.container}
+    >
       <Text style={styles.title}>
         {step === 1 ? "Criar Conta" : "Endereço"}
       </Text>
@@ -134,11 +151,18 @@ export default function Cadastro() {
           <TouchableOpacity
             style={styles.button}
             onPress={() => {
-              if (!nome || !cpf || !telefone || !email || !senha || !dataNascimento) {
-                setError("Preencha todos os campos antes de continuar.");
+              if (
+                !nome ||
+                !cpf ||
+                !telefone ||
+                !email ||
+                !senha ||
+                !dataNascimento
+              ) {
+                setFormError("Preencha todos os campos antes de continuar.");
                 return;
               }
-              setError("");
+              setFormError(undefined);
               setStep(2);
             }}
           >
@@ -193,17 +217,40 @@ export default function Cadastro() {
           {/* BOTÃO FINALIZAR */}
           <TouchableOpacity
             style={styles.button}
-            onPress={() => {
+            disabled={isPending}
+            onPress={async () => {
               if (!rua || !bairro || !cidade || !cep) {
-                setError("Preencha todos os campos do endereço.");
+                setFormError("Preencha todos os campos do endereço.");
                 return;
               }
-              setError("");
-              alert("Cadastro concluído (somente front).");
-              router.replace("/(auth)/login");
+              setFormError(undefined);
+
+              try {
+                await register({
+                  name: nome,
+                  cpf,
+                  cellphone: telefone,
+                  email,
+                  password: senha,
+                  patient: {
+                    dateOfBirth: convertDate(dataNascimento),
+                    street: rua,
+                    state: bairro,
+                    city: cidade,
+                    zipCode: cep,
+                  },
+                });
+
+                router.replace("/(auth)/login");
+              } catch (err) {
+                alert(`Cadastro falhou: ${err.message}`);
+                console.log(err);
+              }
             }}
           >
-            <Text style={styles.buttonText}>Cadastrar</Text>
+            <Text style={styles.buttonText}>
+              {isPending ? "Cadastrando..." : "Cadastrar"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => setStep(1)}>
@@ -217,8 +264,19 @@ export default function Cadastro() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f8f9fa" },
   scrollContainer: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-  title: { fontSize: 32, fontWeight: "bold", color: "#007AFF", marginBottom: 24 },
-  label: { fontSize: 16, fontWeight: "500", marginBottom: 6, marginTop: 12, color: "#343a40" },
+  title: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#007AFF",
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 6,
+    marginTop: 12,
+    color: "#343a40",
+  },
   input: {
     borderWidth: 1,
     borderColor: "#ced4da",
@@ -226,6 +284,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: "#fff",
+    color: "#000",
   },
   hint: { fontSize: 13, color: "#6c757d", marginTop: 6, fontStyle: "italic" },
   tipoContainer: { flexDirection: "row", gap: 8, marginTop: 8 },
@@ -249,8 +308,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e9ecef",
   },
-  suggestionsTitle: { fontSize: 13, fontWeight: "600", color: "#495057", marginBottom: 8 },
-  suggestionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 },
+  suggestionsTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#495057",
+    marginBottom: 8,
+  },
+  suggestionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 6,
+  },
   suggestionChip: {
     backgroundColor: "#fff",
     paddingHorizontal: 12,
@@ -274,5 +343,10 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: "#fff", fontWeight: "bold", fontSize: 18 },
   error: { color: "#dc3545", marginTop: 10, fontSize: 14, fontWeight: "500" },
-  linkText: { marginTop: 16, textAlign: "center", color: "#007AFF", fontWeight: "500" },
+  linkText: {
+    marginTop: 16,
+    textAlign: "center",
+    color: "#007AFF",
+    fontWeight: "500",
+  },
 });

@@ -2,7 +2,14 @@
 console.log("🔥 VERSÃO NOVA DO CÓDIGO CARREGOU 🔥");
 
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -43,15 +50,13 @@ export default function Login() {
 
       // 🔀 NAVEGAÇÃO
       router.replace("/(tabs)");
-
     } catch (error) {
       console.error("❌ ERRO DE LOGIN REAL:", error);
 
       Alert.alert(
         "Erro ao entrar",
-        `Código: ${error.code}\n\nMensagem: ${error.message}`
+        `Código: ${error.code}\n\nMensagem: ${error.message}`,
       );
-
     } finally {
       setLoading(false);
     }
@@ -78,7 +83,11 @@ export default function Login() {
         onChangeText={setSenha}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={handleLogin}
+        disabled={loading}
+      >
         <Text style={styles.buttonText}>
           {loading ? "Carregando..." : "Entrar"}
         </Text>
@@ -115,7 +124,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 16,
     backgroundColor: "#f8f9fa",
-    color: "#495057",
+    color: "#000",
   },
 
   button: {

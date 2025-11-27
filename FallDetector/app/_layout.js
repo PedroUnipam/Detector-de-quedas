@@ -8,6 +8,8 @@ import { auth } from "../services/firebase";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
+import { AuthProvider } from "../contexts/auth";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ============================================================
 // 🔔 CONFIGURAÇÃO GLOBAL DE NOTIFICAÇÕES
@@ -30,7 +32,8 @@ async function configureNotifications() {
     }
 
     // Verifica permissões
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== "granted") {
@@ -58,6 +61,14 @@ async function configureNotifications() {
     console.error("Erro ao configurar notificações:", error);
   }
 }
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    mutations: {
+      retry: false,
+    },
+  },
+});
 
 // ============================================================
 // 🔐 ROOT LAYOUT
@@ -108,5 +119,11 @@ export default function RootLayout() {
 
   if (loading) return null;
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <Stack screenOptions={{ headerShown: false }} />;
+      </AuthProvider>
+    </QueryClientProvider>
+  );
 }
