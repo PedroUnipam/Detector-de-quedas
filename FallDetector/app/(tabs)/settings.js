@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -16,10 +17,32 @@ import { useRouter } from "expo-router";
 import { auth } from "../../services/firebase";
 import { signOut } from "firebase/auth";
 
+import { useProfile } from "../../hooks/useProfile";
+
 export default function SettingsScreen() {
   const router = useRouter();
 
-  const userData = { nome: "User" };
+  const { profile: userProfile, loading, error } = useProfile();
+
+  if (loading) {
+    console.log("⏳ Renderizando tela de loading...");
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Carregando...</Text>
+      </View>
+    );
+  }
+
+  // Tela de erro
+  if (error) {
+    console.log("❌ Renderizando tela de erro:", error);
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>❌ {error}</Text>
+      </View>
+    );
+  }
 
   const handleLogout = async () => {
     try {
@@ -57,7 +80,7 @@ export default function SettingsScreen() {
           onPress={() => router.push("/profile/edit")}
         >
           <View>
-            <Text style={styles.profileName}>{userData?.nome}</Text>
+            <Text style={styles.profileName}>{userProfile?.name}</Text>
             <Text style={styles.profileAction}>Ver Perfil</Text>
           </View>
         </TouchableOpacity>
@@ -89,7 +112,6 @@ export default function SettingsScreen() {
 
       <View style={styles.versionInfo}>
         <Text style={styles.versionText}>Versão 1.0.0</Text>
-        <Text style={styles.versionText}>{userData?.email}</Text>
       </View>
     </ScrollView>
   );
